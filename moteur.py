@@ -147,7 +147,17 @@ def parse_entries(data: dict) -> dict:
             duration = None
         is_short = "/shorts/" in source_url.lower()
         nested = item.get("_type") == "playlist"
+        thumbnail = str(item.get("thumbnail") or "")
+        if not thumbnail:
+            thumbnails = item.get("thumbnails")
+            if isinstance(thumbnails, list):
+                for candidate in reversed(thumbnails):
+                    if isinstance(candidate, dict) and candidate.get("url"):
+                        thumbnail = str(candidate["url"])
+                        break
+        channel = str(item.get("channel") or item.get("uploader") or item.get("channel_id") or "")[:160]
         entries.append({"index": idx, "title": title, "duration": int(duration) if duration is not None else None,
-                        "short": is_short, "nested": nested, "id": str(item.get("id") or "")[:120]})
+                        "short": is_short, "nested": nested, "id": str(item.get("id") or "")[:120],
+                        "thumbnail": thumbnail[:2000], "channel": channel})
     return {"title": str(data.get("title") or "Média")[:240], "entries": entries,
             "truncated": truncated, "has_playlist": isinstance(data.get("entries"), list)}

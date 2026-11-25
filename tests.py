@@ -41,9 +41,12 @@ class TestMoteur(unittest.TestCase):
         self.assertEqual(cmd[cmd.index('--playlist-end')+1], '251')
 
     def test_parse_single_and_playlist(self):
-        single = moteur.parse_entries({'id': '123', 'title': 'Titre'})
+        single = moteur.parse_entries({'id': '123', 'title': 'Titre', 'uploader': 'Chaîne test',
+                                       'thumbnail': 'https://img.example/test.jpg'})
         self.assertEqual(len(single['entries']), 1)
         self.assertFalse(single['has_playlist'])
+        self.assertEqual(single['entries'][0]['channel'], 'Chaîne test')
+        self.assertEqual(single['entries'][0]['thumbnail'], 'https://img.example/test.jpg')
         playlist = moteur.parse_entries({'title': 'Collection', 'entries':[
             {'id': 'a', 'title': 'Intro'}, {'id':'b', 'url':'https://youtube.com/shorts/b', 'title':'Extrait'},
             {'_type':'playlist','title':'Sous-collection'}]})
