@@ -123,6 +123,13 @@ class TestMoteur(unittest.TestCase):
         with self.assertRaises(ValueError):
             moteur.make_download_command('python','https://example.com/x','/missing/directory/xx','audio_original','best',[1])
 
+    def test_existing_download_archive_is_read(self):
+        with tempfile.TemporaryDirectory() as directory:
+            archive = moteur.archive_path(directory, 'video_mp4', '1080')
+            archive.write_text('youtube abc123def45\nyoutube xyz987uvw65\n', encoding='utf-8')
+            self.assertEqual(moteur.read_archive_ids(directory, 'video_mp4', '1080'),
+                             {'abc123def45', 'xyz987uvw65'})
+
 
 class TestServeur(unittest.TestCase):
     @classmethod
@@ -196,6 +203,49 @@ class TestServeur(unittest.TestCase):
                 (serveur.STATE.history, serveur.STATE.running,
                  serveur.STATE.active_history_id, serveur.STATE.progress,
                  serveur.STATE.status) = previous
+
+    def test_download_info_marks_existing_video(self):
+        with tempfile.TemporaryDirectory() as directory:
+            moteur.archive_path(directory, 'video_mp4', 'best').write_text(
+                'youtube abc123def45\n', encoding='utf-8')
+            with serveur.STATE.lock:
+                previous = serveur.STATE.preview_media
+                serveur.STATE.preview_media = {
+                    1: {'id':'abc123def45','title':'Déjà là'},
+                    2: {'id':'new123video','title':'Nouvelle'}
+                }
+            try:
+                code, raw = self.call('/api/download-info', {
+                    'mode':'video_mp4','quality':'best','folder':directory})
+                self.assertEqual(code, 200)
+                self.assertEqual(json.loads(raw)['downloaded_indices'], [1])
+            finally:
+                with serveur.STATE.lock:
+                    serveur.STATE.preview_media = previous
+
+    def test_success_marker_records_downloaded_video(self):
+        with serveur.STATE.lock:
+            previous = (serveur.STATE.downloads, serveur.STATE.active_items,
+                        serveur.STATE.last_command_mode, serveur.STATE.active_quality,
+                        serveur.STATE.active_folder)
+            serveur.STATE.downloads = {}
+            serveur.STATE.active_items = {'abc123def45': {
+                'id':'abc123def45','title':'Vidéo terminée','thumbnail':'https://img/test.jpg'}}
+            serveur.STATE.last_command_mode = 'video_mp4'
+            serveur.STATE.active_quality = '1080'
+            serveur.STATE.active_folder = 'C:/Videos'
+        try:
+            with patch.object(serveur.STATE, '_save_downloads'):
+                serveur.STATE.log('MEDIA_SELECT_DONE:abc123def45')
+            record = next(iter(serveur.STATE.downloads.values()))
+            self.assertEqual(record['title'], 'Vidéo terminée')
+            self.assertEqual(record['mode'], 'video_mp4')
+            self.assertEqual(record['quality'], '1080')
+        finally:
+            with serveur.STATE.lock:
+                (serveur.STATE.downloads, serveur.STATE.active_items,
+                 serveur.STATE.last_command_mode, serveur.STATE.active_quality,
+                 serveur.STATE.active_folder) = previous
 
     def test_preview_mocked(self):
         with patch.object(serveur,'preview',return_value={'title':'Test','entries':[],'truncated':False,'has_playlist':True}):

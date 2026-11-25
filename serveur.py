@@ -23,12 +23,13 @@ from decouverte import discover, is_listing_page
 
 from moteur import (make_download_command, make_preview_command, normalize_channel,
                     parse_entries, validate_url, parse_source_urls, recognize_site,
-                    PREVIEW_LIMIT, MODES, QUALITIES)
+                    read_archive_ids, PREVIEW_LIMIT, MODES, QUALITIES)
 
 FROZEN = bool(getattr(sys, "frozen", False))
 BASE = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 DATA_BASE = Path(sys.executable).resolve().parent if FROZEN else BASE
 HISTORY_FILE = DATA_BASE / "historique.json"
+DOWNLOADS_FILE = DATA_BASE / "telechargements.json"
 THUMBNAIL_CACHE = {}
 THUMBNAIL_LOCK = threading.Lock()
 
@@ -83,9 +84,14 @@ class State:
         self.preview_discovered = {}
         self.preview_discovery_mode = False
         self.preview_titles = {}
+        self.preview_media = {}
         self.preview_title = ""
         self.active_history_id = ""
+        self.active_items = {}
+        self.active_quality = "best"
+        self.active_folder = ""
         self.history = self._load_history()
+        self.downloads = self._load_downloads()
 
     @staticmethod
     def _load_history():
@@ -102,6 +108,49 @@ class State:
             temporary.replace(HISTORY_FILE)
         except OSError:
             pass
+
+    @staticmethod
+    def _load_downloads():
+        try:
+            data = json.loads(DOWNLOADS_FILE.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+        except (OSError, ValueError, TypeError):
+            return {}
+
+    def _save_downloads(self):
+        try:
+            temporary = DOWNLOADS_FILE.with_suffix(".json.tmp")
+            temporary.write_text(json.dumps(self.downloads, ensure_ascii=False, indent=2), encoding="utf-8")
+            temporary.replace(DOWNLOADS_FILE)
+        except OSError:
+            pass
+
+    @staticmethod
+    def download_key(media_id, mode, quality):
+        profile = quality if str(mode).startswith("video_") else mode
+        return f"{media_id}|{mode}|{profile}"
+
+    def downloaded_indices(self, mode, quality, folder):
+        archive_ids = read_archive_ids(folder, mode, quality) if folder else set()
+        with self.lock:
+            known_ids = {record.get("id") for record in self.downloads.values()
+                         if record.get("mode") == mode and
+                         (not str(mode).startswith("video_") or record.get("quality") == quality)}
+            ids = archive_ids | known_ids
+            return sorted(index for index, media in self.preview_media.items()
+                          if media.get("id") and media.get("id") in ids)
+
+    def record_download(self, media_id):
+        with self.lock:
+            media = self.active_items.get(media_id, {"id": media_id, "title": media_id})
+            key = self.download_key(media_id, self.last_command_mode, self.active_quality)
+            self.downloads[key] = {
+                "id": media_id, "title": media.get("title", media_id),
+                "thumbnail": media.get("thumbnail", ""), "mode": self.last_command_mode,
+                "quality": self.active_quality, "folder": self.active_folder,
+                "downloaded_at": time.strftime("%Y-%m-%dT%H:%M:%S")
+            }
+            self._save_downloads()
 
     def add_history(self, *, title, count, mode, quality, folder, items):
         with self.lock:
@@ -139,6 +188,11 @@ class State:
 
     def log(self, line):
         with self.lock:
+            completed = re.search(r"MEDIA_SELECT_DONE:([A-Za-z0-9_-]+)", line)
+            if completed:
+                self.record_download(completed.group(1))
+                self.status = "Vidéo enregistrée avec succès"
+                return
             self.logs.append(line[:800])
             if "[download]" in line:
                 found = re.search(r"\b(\d+(?:\.\d+)?)%", line)
@@ -268,6 +322,7 @@ def preview(urls):
         STATE.preview_discovered = {}
         STATE.preview_discovery_mode = False
         STATE.preview_titles = {}
+        STATE.preview_media = {}
         STATE.preview_title = ""
     try:
         if len(urls) == 1:
@@ -301,6 +356,10 @@ def preview(urls):
                                         if STATE.preview_discovery_mode else {})
             STATE.preview_titles = {e["index"]: e.get("title", "Vidéo") for e in result["entries"]
                                     if not e["nested"]}
+            STATE.preview_media = {e["index"]: {
+                "id": e.get("id", ""), "title": e.get("title", "Vidéo"),
+                "thumbnail": e.get("thumbnail", "")
+            } for e in result["entries"] if not e["nested"]}
             STATE.preview_title = result.get("title", "Téléchargement")
         return result
     finally:
@@ -396,6 +455,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self.response(200, {"folder": value})
             if self.path == "/api/history":
                 return self.response(200, {"entries": STATE.history_snapshot()})
+            if self.path == "/api/download-info":
+                mode = data.get("mode")
+                quality = data.get("quality", "best")
+                if mode not in MODES or quality not in QUALITIES:
+                    raise ValueError("Format ou qualité inconnus.")
+                indices = STATE.downloaded_indices(mode, quality, str(data.get("folder") or ""))
+                return self.response(200, {"downloaded_indices": indices})
             if self.path == "/api/start":
                 urls = parse_source_urls(data.get("url", ""))
                 if len(urls) == 1:
@@ -416,6 +482,12 @@ class Handler(BaseHTTPRequestHandler):
                             raise ValueError("Sélection d'éléments incorrecte.")
                         if not set(indices).issubset(STATE.preview_valid_indices):
                             raise ValueError("La sélection ne correspond pas à la liste analysée.")
+                    requested_indices = sorted(indices or STATE.preview_valid_indices)
+                    duplicates = set(STATE.downloaded_indices(
+                        mode, quality, str(data.get("folder") or "")))
+                    indices = [index for index in requested_indices if index not in duplicates]
+                    if not indices:
+                        raise ValueError("Cette sélection a déjà été téléchargée dans ce format.")
                     discovered = dict(STATE.preview_discovered)
                     if STATE.preview_discovery_mode:
                         if not discovered:
@@ -448,14 +520,20 @@ class Handler(BaseHTTPRequestHandler):
                     STATE.running = True
                     STATE.cancel_requested = False
                     STATE.last_command_mode = mode
-                    selected_indices = sorted(indices or STATE.preview_valid_indices)
+                    STATE.active_quality = quality
+                    STATE.active_folder = str(data.get("folder") or "")
+                    selected_indices = sorted(indices)
+                    STATE.active_items = {
+                        STATE.preview_media[index]["id"]: dict(STATE.preview_media[index])
+                        for index in selected_indices if STATE.preview_media.get(index, {}).get("id")
+                    }
                     selected_titles = [STATE.preview_titles.get(index, f"Vidéo {index}")
                                        for index in selected_indices]
                     STATE.active_history_id = STATE.add_history(
                         title=STATE.preview_title, count=len(selected_indices), mode=mode,
                         quality=quality, folder=str(data.get("folder") or ""), items=selected_titles)
                 threading.Thread(target=work_download, args=(commands,), daemon=True).start()
-                return self.response(200, {"ok": True})
+                return self.response(200, {"ok": True, "skipped": len(duplicates & set(requested_indices))})
             if self.path == "/api/cancel":
                 with STATE.lock:
                     if not STATE.running:

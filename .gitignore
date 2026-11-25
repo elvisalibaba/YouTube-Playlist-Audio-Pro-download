@@ -4,6 +4,8 @@ __pycache__/
 diagnostic_demarrage.txt
 historique.json
 historique.json.tmp
+telechargements.json
+telechargements.json.tmp
 build/
 dist/
 *.spec

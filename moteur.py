@@ -17,6 +17,20 @@ def yt_dlp_prefix(python: str | list[str]) -> list[str]:
     return [python, "-m", "yt_dlp"]
 
 
+def archive_path(folder: str, mode: str, quality: str) -> Path:
+    archive_name = f"{mode}_{quality}" if mode.startswith("video_") else mode
+    return Path(folder).expanduser().resolve() / f".telechargements_{archive_name}.txt"
+
+
+def read_archive_ids(folder: str, mode: str, quality: str) -> set[str]:
+    path = archive_path(folder, mode, quality)
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return set()
+    return {line.rsplit(" ", 1)[-1].strip() for line in lines if line.strip()}
+
+
 def validate_url(value: str) -> str:
     if not isinstance(value, str) or len(value) > 4096:
         raise ValueError("URL invalide.")
@@ -99,13 +113,13 @@ def make_download_command(python: str | list[str], url: str | list[str], folder:
     if not output.is_dir():
         raise ValueError("Le dossier de destination doit déjà exister.")
     # Archive by mode to allow downloading an audio and a video of the same source separately.
-    archive_name = f"{mode}_{quality}" if mode.startswith("video_") else mode
-    archive = output / f".telechargements_{archive_name}.txt"
+    archive = archive_path(str(output), mode, quality)
     cmd = yt_dlp_prefix(python) + ["--ignore-config", "--newline", "--no-overwrites",
            "--continue", "--ignore-errors", "--windows-filenames", "--trim-filenames", "180",
            "--download-archive", str(archive), "-P", str(output),
            "-o", "%(extractor_key|Site)s/%(playlist_title|Vidéos)s/%(playlist_index|0)03d - %(title).150B [%(id)s].%(ext)s",
-           "--retries", "5", "--fragment-retries", "5", "--concurrent-fragments", "3"]
+           "--retries", "5", "--fragment-retries", "5", "--concurrent-fragments", "3",
+           "--print", "after_move:MEDIA_SELECT_DONE:%(id)s"]
     if direct_links:
         cmd.append("--no-playlist")
     if indices is not None:
