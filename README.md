@@ -1,70 +1,71 @@
-# Media Select Pro V7 — Sélection audio et vidéo multi-sites
+# YouTube Playlist Audio Pro Download
 
-Application Python locale avec interface Web sur `127.0.0.1`. Elle conserve les fonctionnalités de la V6 et corrige un défaut : les **pages de profil et d'accueil ne sont pas automatiquement des URL vidéo valables pour yt-dlp**.
+Application Python locale avec interface Web pour analyser et télécharger des vidéos, des playlists et des pistes audio avec `yt-dlp`.
 
-## Deux correctifs de découverte
+## Fonctionnalités
 
-**Eporner — page de profil publique**
+- Analyse d'une URL de vidéo, de playlist ou de chaîne compatible avec `yt-dlp`.
+- Sélection individuelle ou groupée des éléments à télécharger.
+- Téléchargement dans le format audio original, MP3 ou M4A.
+- Téléchargement vidéo en qualité maximale ou en MP4 avec une résolution choisie.
+- Affichage de la progression et des erreurs dans le journal de l'application.
+- Interface accessible uniquement en local sur `127.0.0.1`.
 
-Colle `https://www.eporner.com/profile/Jessy18/`. La V7 tente de lire la page « Uploaded videos » du profil et affiche les liens vidéo publics trouvés. Elle n'envoie **jamais** l'URL de profil à yt-dlp pour la télécharger. Si l'onglet ne fonctionne pas dans le navigateur, essaie directement `https://www.eporner.com/profile/Jessy18/uploaded-videos/`.
+## Installation sous Windows 10 et 11
 
-**Djatoya — page d'accueil publique**
+1. Installer **Python 3.11 ou une version supérieure** depuis https://www.python.org/downloads/ en cochant l'option « Add Python to PATH ».
+2. Télécharger ou extraire entièrement le projet.
+3. Ouvrir le dossier du projet.
+4. Double-cliquer sur **`OUVRIR_WINDOWS.cmd`**.
+5. Au premier démarrage, patienter pendant la création de `.venv` et l'installation des dépendances.
+6. Garder la fenêtre de commande ouverte pendant l'utilisation.
 
-Colle `https://djatoya.com/`. La V7 cherche les liens publics vers les fiches de vidéos, par exemple celles de la forme `/video/12345/titre/`. Elle permet de choisir parmi les liens trouvés. **Important : la découverte de liens n'est pas une preuve que la vidéo est extractible.** Djatoya n'a pas d'extracteur dédié répertorié dans la liste officielle de yt-dlp. Un lien vidéo Djatoya peut encore afficher `Unsupported URL` ; le logiciel montre alors l'erreur dans le journal, sans prétendre avoir téléchargé le contenu.
+L'interface s'ouvre automatiquement dans le navigateur. En cas de problème au démarrage, consulter `diagnostic_demarrage.txt`.
 
-Pour les autres sites, le fonctionnement habituel de `yt-dlp` est conservé : une URL de vidéo, de playlist ou de chaîne compatible. Il n'existe pas de prise en charge garantie de tous les sites, et les DRM ne sont pas contournés.
+## Outils recommandés
 
-## Installation (Windows 10/11)
-
-1. Installer **Python 3.11 ou supérieur** depuis https://www.python.org/downloads/ (cocher « Add Python to PATH »).
-2. Extraire entièrement le fichier ZIP.
-3. Dans le dossier `Media_Select_Pro_V7`, double-cliquer sur **`OUVRIR_WINDOWS.cmd`**.
-4. Le premier démarrage crée `.venv` et installe `yt-dlp[default]` via Internet.
-5. Garder la fenêtre noire ouverte. L'interface Web s'ouvre dans ton navigateur.
-
-Pour les conversions MP3/M4A et les vidéos de meilleure qualité, installer FFmpeg ; pour YouTube, installer Deno peut être nécessaire :
+FFmpeg est nécessaire pour certaines conversions audio et pour obtenir les meilleures qualités vidéo. Deno peut être nécessaire pour certaines vidéos YouTube.
 
 ```powershell
 winget install Gyan.FFmpeg
 winget install DenoLand.Deno
 ```
 
-Relancer le programme après installation. Le script de lancement garde la fenêtre ouverte et écrit `diagnostic_demarrage.txt` en cas de problème.
+Relancer l'application après l'installation.
 
-## Utilisation pour un profil ou une page d'accueil
+## Utilisation
 
-1. Coller **l'URL de la page** et cliquer **Analyser et afficher les vidéos**.
-2. Examiner les titres présentés ; les 5 premiers sont sélectionnés par défaut.
-3. Choisir quelques vidéos, « Tout cocher », ou « Toutes les vidéos de cette page ».
-4. Si le site expose une page suivante, le bouton **Afficher la page suivante du site** permet de passer à celle-ci. La sélection précédente n'est pas conservée lors du changement de page.
-5. Choisir audio original, MP3, M4A, vidéo qualité maximale ou MP4 avec plafond 360p–2160p selon les formats disponibles.
-6. Sélectionner un dossier qui existe déjà et lancer le téléchargement.
-7. Consulter le **journal** : il montre les erreurs d'extraction et ne promet pas qu'une vidéo a été téléchargée si la liste a simplement été trouvée.
+1. Coller l'URL d'une vidéo, d'une playlist ou d'une chaîne compatible.
+2. Cliquer sur **Analyser et afficher les vidéos**.
+3. Sélectionner les éléments à télécharger.
+4. Choisir le format audio ou vidéo souhaité.
+5. Sélectionner un dossier de destination existant.
+6. Lancer le téléchargement et suivre sa progression dans le journal.
 
-### Différence importante : « tout »
+Pour plusieurs liens individuels, coller entre 2 et 30 URL. L'option **Tous les liens collés** concerne uniquement les URL saisies.
 
-- **Page publique découverte** (Eporner/Djatoya) : « Tout » veut dire **tous les liens détectés et affichés sur cette page**, plafonnés à 100 par page. Ce n'est pas l'intégralité d'un profil comptant des milliers de vidéos. Utiliser la navigation par pages.
-- **Playlist native reconnue par yt-dlp** : « Toute la playlist » peut inclure plus d'éléments que l'aperçu de 250, selon le site.
-- **Plusieurs URL collées** (2 à 30 liens individuels) : « Tous les liens collés » concerne uniquement ces URL.
+## Formats disponibles
 
-Les URL découvertes sont transmises au téléchargeur **par petits lots de 8 maximum**, sans jamais télécharger la page catalogue elle-même. Les sites peuvent changer leur structure et bloquer la lecture automatique des listes.
+- Audio original
+- MP3
+- M4A
+- Vidéo en qualité maximale
+- MP4 avec une résolution comprise entre 360p et 2160p, selon les formats disponibles
 
-## Sécurité, limites et précision
+## Sécurité et limites
 
-- La découverte HTML est limitée explicitement à Eporner (pages de profil) et Djatoya (pages publiques). Les URL en dehors de ces domaines ne sont pas suivies pendant la découverte.
-- Connexions HTTPS, refus des adresses IP locales/privées, limitation de la taille des pages et des redirections externes.
-- Aucune utilisation de cookies privés, aucune authentification automatique et aucun contournement de DRM/paywall/contrôle d'accès.
-- La version actuelle ne dispose pas d'un extracteur spécifique pour les lecteurs internes de Djatoya. Pour être pleinement compatible avec ces lecteurs, une analyse technique de pages vidéo publiques et de leurs flux serait encore nécessaire. **Le fonctionnement des téléchargements Djatoya n'est pas validé.**
-- Ne télécharger que des contenus dont l'accès et la copie sont autorisés. Pour des contenus intimes, s'assurer du consentement des personnes concernées ; ne pas télécharger ni partager de contenus privés ou diffusés sans consentement.
-- Aucun téléchargement réel de ces sites n'a été possible dans notre environnement de tests. Les tests automatisés utilisent des pages HTML simulées et les URL publiques vérifiées dans leur structure.
+- L'application fonctionne localement et n'expose pas son interface sur le réseau.
+- Les connexions externes utilisent HTTPS lorsque le site le permet.
+- L'application ne contourne pas les DRM, les paywalls ou les contrôles d'accès.
+- La compatibilité dépend des sites et des extracteurs pris en charge par `yt-dlp`.
+- Télécharger uniquement les contenus dont l'accès et la copie sont autorisés.
 
 ## Dépannage
 
-- **« Aucun lien vidéo détecté »** : la page peut demander JavaScript, être vide ou avoir changé ; essayer une autre page publique ou coller des liens vidéo individuels.
-- **« Unsupported URL » sur une vidéo Djatoya** : la liste a été découverte mais yt-dlp n'a pas pu extraire le lecteur. Ce n'est pas un échec de sélection.
-- **« Unsupported URL » sur un profil Eporner** : vérifier que tu as lancé la V7 et non l'ancien lanceur V6, puis utiliser l'adresse `/uploaded-videos/`.
-- **Accès refusé / 403** : le site bloque la lecture automatique. Le logiciel n'essaie pas de contourner cette restriction.
-- **Pas de FFmpeg** : installer les outils ci-dessus et rouvrir l'application.
+- **URL non prise en charge** : vérifier que l'adresse est correcte et que le site figure parmi les plateformes compatibles avec `yt-dlp`.
+- **Accès refusé ou erreur 403** : le site bloque la lecture automatique de la page.
+- **FFmpeg introuvable** : installer FFmpeg avec la commande indiquée plus haut, puis relancer l'application.
+- **L'interface ne s'ouvre pas** : consulter `diagnostic_demarrage.txt` et vérifier que la fenêtre de commande reste ouverte.
 
 ## Tests locaux
 
@@ -72,4 +73,7 @@ Les URL découvertes sont transmises au téléchargeur **par petits lots de 8 ma
 python -m unittest -v tests.py
 ```
 
-Ressources : https://github.com/yt-dlp/yt-dlp , https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md
+## Ressources
+
+- https://github.com/yt-dlp/yt-dlp
+- https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md
