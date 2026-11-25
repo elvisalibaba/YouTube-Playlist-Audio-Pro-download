@@ -12,6 +12,7 @@ Application Python locale avec interface Web pour analyser et télécharger des 
 - Historique local persistant des 100 derniers téléchargements.
 - Détection des vidéos déjà téléchargées selon le format et la qualité choisis.
 - Lecture automatique des archives existantes dans le dossier de destination pour éviter les doublons.
+- Classement automatique dans `Dossier mère\Audio` ou `Dossier mère\Video` selon le type choisi.
 - Téléchargement dans le format audio original, MP3 ou M4A.
 - Téléchargement vidéo en qualité maximale ou en MP4 avec une résolution choisie.
 - Affichage de la progression et des erreurs dans le journal de l'application.

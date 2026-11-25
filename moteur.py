@@ -22,6 +22,11 @@ def archive_path(folder: str, mode: str, quality: str) -> Path:
     return Path(folder).expanduser().resolve() / f".telechargements_{archive_name}.txt"
 
 
+def media_output_folder(folder: str, mode: str) -> Path:
+    category = "Audio" if mode.startswith("audio_") else "Video"
+    return Path(folder).expanduser().resolve() / category
+
+
 def read_archive_ids(folder: str, mode: str, quality: str) -> set[str]:
     path = archive_path(folder, mode, quality)
     try:
@@ -109,11 +114,13 @@ def make_download_command(python: str | list[str], url: str | list[str], folder:
         if not indices or len(indices) > PREVIEW_LIMIT or any(type(i) is not int or i < 1 for i in indices):
             raise ValueError("Sélection d'éléments incorrecte.")
         indices = sorted(set(indices))
-    output = Path(folder).expanduser().resolve()
-    if not output.is_dir():
+    output_root = Path(folder).expanduser().resolve()
+    if not output_root.is_dir():
         raise ValueError("Le dossier de destination doit déjà exister.")
-    # Archive by mode to allow downloading an audio and a video of the same source separately.
-    archive = archive_path(str(output), mode, quality)
+    output = media_output_folder(str(output_root), mode)
+    output.mkdir(exist_ok=True)
+    # Archive conservée dans le dossier mère pour reconnaître les téléchargements existants.
+    archive = archive_path(str(output_root), mode, quality)
     cmd = yt_dlp_prefix(python) + ["--ignore-config", "--newline", "--no-overwrites",
            "--continue", "--ignore-errors", "--windows-filenames", "--trim-filenames", "180",
            "--download-archive", str(archive), "-P", str(output),
