@@ -155,9 +155,14 @@ def parse_entries(data: dict) -> dict:
                     if isinstance(candidate, dict) and candidate.get("url"):
                         thumbnail = str(candidate["url"])
                         break
+        media_id = str(item.get("id") or "")[:120]
+        extractor = str(item.get("ie_key") or item.get("extractor_key") or data.get("extractor_key") or "").lower()
+        is_youtube = "youtube" in extractor or "youtube.com" in source_url or "youtu.be" in source_url
+        if not thumbnail and is_youtube and re.fullmatch(r"[A-Za-z0-9_-]{11}", media_id):
+            thumbnail = f"https://i.ytimg.com/vi/{media_id}/hqdefault.jpg"
         channel = str(item.get("channel") or item.get("uploader") or item.get("channel_id") or "")[:160]
         entries.append({"index": idx, "title": title, "duration": int(duration) if duration is not None else None,
-                        "short": is_short, "nested": nested, "id": str(item.get("id") or "")[:120],
+                        "short": is_short, "nested": nested, "id": media_id,
                         "thumbnail": thumbnail[:2000], "channel": channel})
     return {"title": str(data.get("title") or "Média")[:240], "entries": entries,
             "truncated": truncated, "has_playlist": isinstance(data.get("entries"), list)}

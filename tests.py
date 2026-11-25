@@ -47,6 +47,10 @@ class TestMoteur(unittest.TestCase):
         self.assertFalse(single['has_playlist'])
         self.assertEqual(single['entries'][0]['channel'], 'Chaîne test')
         self.assertEqual(single['entries'][0]['thumbnail'], 'https://img.example/test.jpg')
+        youtube = moteur.parse_entries({'extractor_key': 'YoutubeTab', 'entries': [
+            {'id': 'BaW_jenozKc', 'title': 'Vidéo sans miniature'}]})
+        self.assertEqual(youtube['entries'][0]['thumbnail'],
+                         'https://i.ytimg.com/vi/BaW_jenozKc/hqdefault.jpg')
         playlist = moteur.parse_entries({'title': 'Collection', 'entries':[
             {'id': 'a', 'title': 'Intro'}, {'id':'b', 'url':'https://youtube.com/shorts/b', 'title':'Extrait'},
             {'_type':'playlist','title':'Sous-collection'}]})
@@ -153,6 +157,9 @@ class TestServeur(unittest.TestCase):
         code,raw=self.call('/api/status')
         self.assertEqual(code,200)
         self.assertIn('ffmpeg',json.loads(raw))
+        code,raw=self.call('/api/history',{})
+        self.assertEqual(code,200)
+        self.assertIn('entries',json.loads(raw))
 
     def test_access_control(self):
         code,raw=self.call('/api/cancel',{},False)

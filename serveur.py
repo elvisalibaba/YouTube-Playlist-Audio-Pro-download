@@ -24,6 +24,7 @@ from moteur import (make_download_command, make_preview_command, normalize_chann
                     PREVIEW_LIMIT, MODES, QUALITIES)
 
 BASE = Path(__file__).resolve().parent
+HISTORY_FILE = BASE / "historique.json"
 
 
 class State:
@@ -45,6 +46,54 @@ class State:
         self.preview_has_playlist = False
         self.preview_discovered = {}
         self.preview_discovery_mode = False
+        self.preview_titles = {}
+        self.preview_title = ""
+        self.active_history_id = ""
+        self.history = self._load_history()
+
+    @staticmethod
+    def _load_history():
+        try:
+            data = json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
+            return data[:100] if isinstance(data, list) else []
+        except (OSError, ValueError, TypeError):
+            return []
+
+    def _save_history(self):
+        try:
+            temporary = HISTORY_FILE.with_suffix(".json.tmp")
+            temporary.write_text(json.dumps(self.history[:100], ensure_ascii=False, indent=2), encoding="utf-8")
+            temporary.replace(HISTORY_FILE)
+        except OSError:
+            pass
+
+    def add_history(self, *, title, count, mode, quality, folder, items):
+        with self.lock:
+            history_id = secrets.token_hex(8)
+            self.history.insert(0, {
+                "id": history_id, "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "title": str(title or "Téléchargement")[:240], "count": int(count),
+                "mode": str(mode), "quality": str(quality), "folder": str(folder)[:1000],
+                "items": [str(value)[:240] for value in items[:20]], "status": "En cours"
+            })
+            self.history = self.history[:100]
+            self._save_history()
+            return history_id
+
+    def finish_history(self, history_id, status):
+        if not history_id:
+            return
+        with self.lock:
+            for entry in self.history:
+                if entry.get("id") == history_id:
+                    entry["status"] = status
+                    entry["completed_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+                    break
+            self._save_history()
+
+    def history_snapshot(self):
+        with self.lock:
+            return [dict(entry) for entry in self.history]
 
     def log(self, line):
         with self.lock:
@@ -87,6 +136,9 @@ def work_download(commands):
     if commands and isinstance(commands[0], str):
         commands = [commands]
     failed = 0
+    with STATE.lock:
+        history_id = STATE.active_history_id
+    history_status = "Erreur"
     try:
         for number, cmd in enumerate(commands, 1):
             with STATE.lock:
@@ -109,20 +161,25 @@ def work_download(commands):
         with STATE.lock:
             if STATE.cancel_requested:
                 STATE.status = "Téléchargement arrêté par l'utilisateur"
+                history_status = "Arrêté"
             elif failed or STATE.errors:
                 STATE.status = (f"Terminé avec {STATE.errors} erreur(s) affichée(s) "
                                 f"et {failed} lot(s) en échec. Consulte le journal.")
+                history_status = "Terminé avec erreurs"
             else:
                 STATE.status = "Traitement terminé. Vérifie les fichiers créés et le journal."
                 STATE.progress = "100%"
+                history_status = "Terminé"
     except Exception as exc:
         STATE.log(f"Erreur interne : {exc}")
         with STATE.lock:
             STATE.status = f"Échec du lancement : {exc}"
     finally:
+        STATE.finish_history(history_id, history_status)
         with STATE.lock:
             STATE.running = False
             STATE.process = None
+            STATE.active_history_id = ""
 
 
 def preview_one(url):
@@ -167,6 +224,8 @@ def preview(urls):
         STATE.preview_valid_indices = set()
         STATE.preview_discovered = {}
         STATE.preview_discovery_mode = False
+        STATE.preview_titles = {}
+        STATE.preview_title = ""
     try:
         if len(urls) == 1:
             if is_listing_page(urls[0]):
@@ -197,6 +256,9 @@ def preview(urls):
             STATE.preview_discovery_mode = bool(result.get("discovered_links"))
             STATE.preview_discovered = ({e["index"]: e["url"] for e in result["entries"]}
                                         if STATE.preview_discovery_mode else {})
+            STATE.preview_titles = {e["index"]: e.get("title", "Vidéo") for e in result["entries"]
+                                    if not e["nested"]}
+            STATE.preview_title = result.get("title", "Téléchargement")
         return result
     finally:
         with STATE.lock:
@@ -276,6 +338,8 @@ class Handler(BaseHTTPRequestHandler):
             if self.path == "/api/folder":
                 value = choose_folder()
                 return self.response(200, {"folder": value})
+            if self.path == "/api/history":
+                return self.response(200, {"entries": STATE.history_snapshot()})
             if self.path == "/api/start":
                 urls = parse_source_urls(data.get("url", ""))
                 if len(urls) == 1:
@@ -328,6 +392,12 @@ class Handler(BaseHTTPRequestHandler):
                     STATE.running = True
                     STATE.cancel_requested = False
                     STATE.last_command_mode = mode
+                    selected_indices = sorted(indices or STATE.preview_valid_indices)
+                    selected_titles = [STATE.preview_titles.get(index, f"Vidéo {index}")
+                                       for index in selected_indices]
+                    STATE.active_history_id = STATE.add_history(
+                        title=STATE.preview_title, count=len(selected_indices), mode=mode,
+                        quality=quality, folder=str(data.get("folder") or ""), items=selected_titles)
                 threading.Thread(target=work_download, args=(commands,), daemon=True).start()
                 return self.response(200, {"ok": True})
             if self.path == "/api/cancel":

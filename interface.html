@@ -3,138 +3,91 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Media Select Pro V7</title>
+<title>Media Select Pro · RDC</title>
 <style>
-:root{color-scheme:dark;--bg:#0f0f0f;--panel:#181818;--panel2:#222;--line:#353535;--text:#f1f1f1;--muted:#aaa;--red:#ff0033;--blue:#3ea6ff;--green:#2ba640;--radius:14px}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 Arial,Helvetica,sans-serif}
-button,input,select,textarea{font:inherit}
-button{cursor:pointer}
-.topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:14px;height:64px;padding:0 24px;background:rgba(15,15,15,.96);border-bottom:1px solid #242424;backdrop-filter:blur(12px)}
-.logo{display:flex;align-items:center;gap:10px;font-size:18px;font-weight:700;white-space:nowrap}.play{display:grid;place-items:center;width:34px;height:24px;border-radius:7px;background:var(--red);font-size:13px}.version{color:var(--muted);font-size:11px;font-weight:400;align-self:flex-start;margin-top:14px}
-.server{margin-left:auto;display:flex;align-items:center;gap:7px;color:#b7ddb9;font-size:12px}.server i{width:8px;height:8px;border-radius:50%;background:#35c759;box-shadow:0 0 10px #35c759}
-main{max-width:1380px;margin:auto;padding:26px 28px 70px}
-.search-panel{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;max-width:1040px;margin:0 auto 24px}
-.url-wrap{position:relative}.url-wrap textarea{width:100%;min-height:52px;max-height:130px;resize:vertical;padding:14px 46px 12px 16px;border:1px solid #555;border-radius:26px;background:#121212;color:#fff;outline:0}.url-wrap textarea:focus{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue)}
-.analyze{height:52px;padding:0 24px;border:0;border-radius:26px;background:#f1f1f1;color:#111;font-weight:700}.analyze:hover{background:#d9d9d9}.analyze:disabled{opacity:.55;cursor:wait}
-.hint{grid-column:1/-1;color:var(--muted);font-size:12px;padding-left:16px;margin-top:-4px}
-.notice{display:none;max-width:1040px;margin:0 auto 20px;padding:12px 15px;border:1px solid #735c22;border-radius:10px;background:#2c2513;color:#f0d58d}.notice.show{display:block}.notice.error{border-color:#813641;background:#32191d;color:#ffb5be}
-.playlist-head{display:none;align-items:flex-end;gap:16px;margin:18px 0}.playlist-head.show{display:flex}.playlist-head h1{margin:0;font-size:24px}.playlist-head p{margin:3px 0 0;color:var(--muted)}.selection-count{margin-left:auto;color:var(--muted);white-space:nowrap}
-.toolbar{display:none;align-items:center;gap:9px;margin-bottom:18px;flex-wrap:wrap}.toolbar.show{display:flex}.small-btn{padding:8px 14px;border:1px solid var(--line);border-radius:18px;background:var(--panel2);color:var(--text)}.small-btn:hover{background:#333}.toolbar .spacer{flex:1}.next-btn{color:var(--blue)}
-.videos{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:25px 16px}
-.video-card{position:relative;min-width:0;border-radius:var(--radius);transition:background .15s,box-shadow .15s}.video-card:hover{background:#181818;box-shadow:0 0 0 8px #181818}.video-card.selected .thumb{box-shadow:0 0 0 3px var(--blue)}.video-card.disabled{opacity:.55}
-.card-check{position:absolute;z-index:3;top:10px;left:10px;width:24px;height:24px;margin:0;accent-color:var(--blue);filter:drop-shadow(0 1px 3px #000)}
-.thumb{position:relative;aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:linear-gradient(135deg,#272727,#1a1a1a);transition:box-shadow .15s}.thumb img{display:block;width:100%;height:100%;object-fit:cover}.thumb-fallback{display:grid;place-items:center;width:100%;height:100%;color:#777;font-size:36px}.duration{position:absolute;right:6px;bottom:6px;padding:2px 5px;border-radius:4px;background:rgba(0,0,0,.82);font-size:12px;font-weight:700}.badge{position:absolute;left:8px;bottom:8px;padding:3px 7px;border-radius:4px;background:rgba(0,0,0,.82);font-size:11px}
-.video-info{padding:11px 4px 0}.video-title{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;margin:0 0 6px;font-size:14px;line-height:1.35;font-weight:700}.video-meta{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.empty{display:none;place-items:center;min-height:260px;border:1px dashed var(--line);border-radius:16px;color:var(--muted);text-align:center}.empty.show{display:grid}.empty strong{display:block;color:var(--text);font-size:18px;margin-bottom:5px}
-.download-panel{display:none;grid-template-columns:repeat(4,minmax(130px,1fr)) auto;gap:12px;align-items:end;margin-top:34px;padding:18px;border:1px solid var(--line);border-radius:16px;background:var(--panel)}.download-panel.show{display:grid}.field{display:flex;flex-direction:column;gap:6px}.field label{color:var(--muted);font-size:12px}.field input,.field select{height:42px;padding:0 11px;border:1px solid #494949;border-radius:9px;background:#101010;color:#fff;outline:0}.folder-row{display:flex}.folder-row input{min-width:0;flex:1;border-radius:9px 0 0 9px}.folder-row button{width:42px;border:1px solid #494949;border-left:0;border-radius:0 9px 9px 0;background:#292929;color:#fff}
-.download{height:42px;padding:0 22px;border:0;border-radius:21px;background:var(--blue);color:#07131c;font-weight:700}.download:disabled{opacity:.45;cursor:not-allowed}.cancel{height:42px;padding:0 18px;border:1px solid #7d333b;border-radius:21px;background:#32191d;color:#ffb5be}
-.progress-panel{display:none;margin-top:18px;padding:18px;border:1px solid var(--line);border-radius:16px;background:var(--panel)}.progress-panel.show{display:block}.progress-head{display:flex;gap:10px;align-items:center}.progress-head strong{flex:1}.progress-head span{color:var(--blue);font-weight:700}.bar{height:5px;margin:12px 0;border-radius:9px;background:#303030;overflow:hidden}.bar i{display:block;width:0;height:100%;background:var(--blue);transition:width .25s}.logs{max-height:230px;overflow:auto;margin:12px 0 0;padding:12px;border-radius:9px;background:#090909;color:#c7c7c7;font:12px/1.5 Consolas,monospace;white-space:pre-wrap}
-@media(max-width:900px){.download-panel{grid-template-columns:1fr 1fr}.download,.cancel{width:100%}}
-@media(max-width:640px){.topbar{padding:0 14px}.server span{display:none}main{padding:18px 14px 60px}.search-panel{grid-template-columns:1fr}.analyze{width:100%}.videos{grid-template-columns:1fr 1fr;gap:22px 10px}.playlist-head{align-items:flex-start}.selection-count{margin-left:0}.download-panel{grid-template-columns:1fr}.video-title{font-size:13px}}
-@media(max-width:420px){.videos{grid-template-columns:1fr}}
+:root{color-scheme:dark;--bg:#041021;--surface:#091b33;--surface2:#0d2442;--line:#1d3b5f;--text:#f7fbff;--muted:#91a9c3;--blue:#00a3dd;--blue2:#47c8f5;--red:#ce1021;--yellow:#f7d618;--green:#2fc477;--shadow:0 22px 60px rgba(0,0,0,.28)}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(circle at 80% -10%,rgba(0,163,221,.14),transparent 35%),var(--bg);color:var(--text);font:14px/1.5 Inter,"Segoe UI",Arial,sans-serif}button,input,select,textarea{font:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--blue2);outline-offset:2px}
+.app{display:grid;grid-template-columns:248px minmax(0,1fr);min-height:100vh}.sidebar{position:sticky;top:0;height:100vh;padding:25px 18px;background:rgba(5,20,39,.96);border-right:1px solid var(--line);backdrop-filter:blur(16px)}
+.brand{display:flex;align-items:center;gap:12px;padding:0 8px 28px}.flag{position:relative;flex:0 0 auto;width:44px;height:31px;overflow:hidden;border-radius:7px;background:#00a3dd;box-shadow:0 8px 24px rgba(0,163,221,.24)}.flag:before{content:"";position:absolute;width:68px;height:14px;left:-12px;top:9px;transform:rotate(-32deg);background:var(--yellow)}.flag:after{content:"";position:absolute;width:68px;height:8px;left:-12px;top:12px;transform:rotate(-32deg);background:var(--red)}.flag-star{position:absolute;z-index:2;left:5px;top:0;color:var(--yellow);font-size:15px}.brand strong{display:block;font-size:16px;letter-spacing:-.02em}.brand span:last-child{color:var(--muted);font-size:11px}
+.nav{display:flex;flex-direction:column;gap:6px}.nav button{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border:1px solid transparent;border-radius:11px;background:transparent;color:var(--muted);text-align:left}.nav button:hover{background:var(--surface);color:#fff}.nav button.active{border-color:rgba(0,163,221,.35);background:linear-gradient(90deg,rgba(0,163,221,.19),rgba(0,163,221,.05));color:#fff}.nav svg{width:19px;height:19px}.country-note{position:absolute;left:26px;right:26px;bottom:25px;color:#7189a2;font-size:11px}.country-note b{display:block;color:#b8cee3;margin-bottom:3px}
+.main{min-width:0}.topbar{display:flex;align-items:center;gap:15px;height:72px;padding:0 34px;border-bottom:1px solid rgba(29,59,95,.7);background:rgba(4,16,33,.78);backdrop-filter:blur(16px)}.page-title{font-size:15px;font-weight:700}.status{margin-left:auto;display:flex;align-items:center;gap:8px;color:#a8d9be;font-size:12px}.status i{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 12px var(--green)}
+.content{max-width:1450px;margin:auto;padding:32px 36px 80px}.view{display:none}.view.active{display:block}.hero{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:space-between;gap:25px;margin-bottom:26px;padding:28px 30px;border:1px solid #18527a;border-radius:20px;background:linear-gradient(120deg,#0a3155,#08213e 64%,#251925);box-shadow:var(--shadow)}.hero:after{content:"";position:absolute;right:-40px;top:-110px;width:310px;height:310px;border:34px solid rgba(247,214,24,.06);border-radius:50%}.hero h1{position:relative;margin:0 0 7px;font-size:29px;letter-spacing:-.035em}.hero p{position:relative;max-width:690px;margin:0;color:#b8cce0}.hero-badge{position:relative;z-index:1;display:flex;align-items:center;gap:9px;padding:10px 14px;border:1px solid rgba(247,214,24,.38);border-radius:99px;background:rgba(4,16,33,.55);color:#ffe96a;font-weight:700;white-space:nowrap}
+.search{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;margin-bottom:9px}.search textarea{width:100%;min-height:56px;max-height:130px;padding:17px 19px;border:1px solid #315274;border-radius:13px;background:#061528;color:#fff;resize:vertical}.search textarea::placeholder{color:#708aa4}.primary{min-height:52px;padding:0 23px;border:0;border-radius:12px;background:linear-gradient(135deg,var(--blue2),var(--blue));color:#02111c;font-weight:800;box-shadow:0 12px 30px rgba(0,163,221,.2)}.primary:hover{filter:brightness(1.08)}.primary:disabled{opacity:.5;cursor:wait}.helper{margin:0 0 25px;color:var(--muted);font-size:12px}
+.notice{display:none;margin-bottom:18px;padding:12px 15px;border:1px solid #735e1f;border-radius:10px;background:#2a2510;color:#ffe485}.notice.show{display:block}.notice.error{border-color:#7a2b39;background:#31131a;color:#ffb8c1}
+.section-head{display:none;align-items:flex-end;gap:18px;margin:26px 0 15px}.section-head.show{display:flex}.section-head h2{margin:0;font-size:23px;letter-spacing:-.025em}.section-head p{margin:3px 0 0;color:var(--muted)}.selected-count{margin-left:auto;color:#b5c9dd;white-space:nowrap}
+.toolbar{display:none;align-items:center;gap:8px;margin-bottom:18px;flex-wrap:wrap}.toolbar.show{display:flex}.secondary{padding:8px 13px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:#dfefff}.secondary:hover{background:var(--surface2);border-color:#315c87}.toolbar .space{flex:1}.next{color:var(--blue2)}
+.videos{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:25px 17px}.video-card{position:relative;min-width:0;padding:7px;border:1px solid transparent;border-radius:15px;transition:.18s}.video-card:hover{border-color:#234c74;background:rgba(13,36,66,.55);transform:translateY(-2px)}.video-card.selected{border-color:var(--blue);background:rgba(0,163,221,.08)}.video-card.disabled{opacity:.55}.card-check{position:absolute;z-index:4;top:17px;left:17px;width:23px;height:23px;margin:0;accent-color:var(--blue);filter:drop-shadow(0 2px 4px #000)}.thumb{position:relative;overflow:hidden;aspect-ratio:16/9;border-radius:11px;background:linear-gradient(135deg,#153452,#09192b)}.thumb img{display:block;width:100%;height:100%;object-fit:cover}.thumb-fallback{display:grid;place-items:center;width:100%;height:100%;color:#5d7a97;font-size:35px}.duration,.badge{position:absolute;bottom:7px;padding:2px 6px;border-radius:4px;background:rgba(0,0,0,.82);font-size:11px;font-weight:800}.duration{right:7px}.badge{left:7px}.video-info{padding:10px 3px 3px}.video-title{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;margin:0 0 6px;font-size:14px;line-height:1.35}.video-meta{overflow:hidden;color:var(--muted);font-size:12px;text-overflow:ellipsis;white-space:nowrap}
+.empty{display:none;place-items:center;min-height:270px;border:1px dashed #294665;border-radius:16px;background:rgba(9,27,51,.34);color:var(--muted);text-align:center}.empty.show{display:grid}.empty-icon{display:grid;place-items:center;width:58px;height:58px;margin:0 auto 12px;border-radius:17px;background:var(--surface2);color:var(--blue2);font-size:24px}.empty strong{display:block;margin-bottom:4px;color:#fff;font-size:18px}
+.download-panel{display:none;position:sticky;z-index:10;bottom:15px;grid-template-columns:1.15fr .9fr 1.45fr auto;gap:12px;align-items:end;margin-top:32px;padding:17px;border:1px solid #295273;border-radius:16px;background:rgba(7,25,47,.95);box-shadow:0 22px 70px rgba(0,0,0,.45);backdrop-filter:blur(18px)}.download-panel.show{display:grid}.field{display:flex;flex-direction:column;gap:6px}.field label{color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.045em}.field input,.field select{height:42px;min-width:0;padding:0 11px;border:1px solid #345474;border-radius:9px;background:#061528;color:#fff}.folder-row{display:flex}.folder-row input{flex:1;border-radius:9px 0 0 9px}.folder-row button{width:43px;border:1px solid #345474;border-left:0;border-radius:0 9px 9px 0;background:#123050;color:#fff}.download{height:42px;padding:0 22px;border:0;border-radius:10px;background:linear-gradient(135deg,var(--yellow),#f6b918);color:#241b00;font-weight:900}.download:disabled{opacity:.4;cursor:not-allowed}.option-line{display:flex;align-items:center;gap:8px;margin-top:12px;color:var(--muted);font-size:12px}.option-line input{accent-color:var(--blue)}
+.progress-panel{display:none;margin-top:18px;padding:18px;border:1px solid var(--line);border-radius:15px;background:var(--surface)}.progress-panel.show{display:block}.progress-head{display:flex;align-items:center;gap:12px}.progress-head strong{flex:1}.progress-head span{color:var(--blue2);font-weight:800}.cancel{padding:8px 14px;border:1px solid #7d3340;border-radius:9px;background:#32141a;color:#ffb4bf}.bar{height:5px;margin:13px 0;border-radius:99px;background:#18304a;overflow:hidden}.bar i{display:block;width:0;height:100%;background:linear-gradient(90deg,var(--blue),var(--yellow));transition:width .25s}.logs{max-height:220px;overflow:auto;margin:0;padding:12px;border-radius:9px;background:#030b16;color:#abc1d7;font:11px/1.55 Consolas,monospace;white-space:pre-wrap}
+.history-head{display:flex;align-items:end;gap:16px;margin-bottom:22px}.history-head h1{margin:0;font-size:28px}.history-head p{margin:4px 0 0;color:var(--muted)}.history-list{display:grid;gap:12px}.history-card{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:15px;align-items:center;padding:17px 19px;border:1px solid var(--line);border-radius:14px;background:linear-gradient(135deg,var(--surface),rgba(9,27,51,.65))}.history-icon{display:grid;place-items:center;width:45px;height:45px;border-radius:12px;background:#123455;color:var(--blue2);font-size:18px}.history-card h3{margin:0 0 4px;font-size:15px}.history-meta{color:var(--muted);font-size:12px}.history-items{margin-top:7px;color:#b6cbe0;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.history-status{padding:6px 10px;border-radius:99px;background:rgba(47,196,119,.12);color:#86e8b6;font-size:11px;font-weight:800}.history-status.error{background:rgba(206,16,33,.14);color:#ff9fab}.history-empty{padding:70px 20px;border:1px dashed var(--line);border-radius:16px;color:var(--muted);text-align:center}
+@media(max-width:1050px){.app{grid-template-columns:82px minmax(0,1fr)}.brand{justify-content:center;padding-left:0;padding-right:0}.brand div:last-child,.nav button span,.country-note{display:none}.nav button{justify-content:center}.download-panel{grid-template-columns:1fr 1fr}.download{width:100%}}
+@media(max-width:700px){.app{display:block}.sidebar{position:fixed;top:auto;bottom:0;z-index:50;width:100%;height:68px;padding:7px 14px;border:0;border-top:1px solid var(--line)}.brand,.country-note{display:none}.nav{flex-direction:row;justify-content:center}.nav button{justify-content:center;max-width:180px}.nav button span{display:inline}.topbar{height:58px;padding:0 16px}.content{padding:20px 14px 95px}.hero{align-items:flex-start;padding:22px}.hero h1{font-size:24px}.hero-badge{display:none}.search{grid-template-columns:1fr}.section-head{align-items:flex-start;flex-direction:column}.selected-count{margin-left:0}.videos{grid-template-columns:1fr 1fr;gap:18px 8px}.download-panel{position:static;grid-template-columns:1fr}.history-card{grid-template-columns:auto minmax(0,1fr)}.history-status{grid-column:2;justify-self:start}.video-title{font-size:13px}}
+@media(max-width:430px){.videos{grid-template-columns:1fr}.nav button span{font-size:12px}}
 </style>
 </head>
 <body>
-<header class="topbar">
-  <div class="logo"><span class="play">▶</span> Media Select Pro <span class="version">V7</span></div>
-  <div class="server"><i></i><span>Application locale</span></div>
-</header>
-<main>
-  <section class="search-panel">
-    <div class="url-wrap"><textarea id="sourceUrl" rows="1" placeholder="Colle une URL YouTube, une playlist, une chaîne ou plusieurs liens…"></textarea></div>
-    <button class="analyze" id="analyzeBtn">Afficher les vidéos</button>
-    <div class="hint">Une playlist ou une chaîne affiche ses vidéos ci-dessous. Tu choisis ensuite celles à télécharger.</div>
-  </section>
-
-  <div class="notice" id="notice" role="alert"></div>
-
-  <section class="playlist-head" id="playlistHead">
-    <div><h1 id="playlistTitle">Vidéos</h1><p id="playlistMeta"></p></div>
-    <div class="selection-count" id="selectionCount">0 sélectionnée</div>
-  </section>
-  <div class="toolbar" id="toolbar">
-    <button class="small-btn" id="selectAll">Tout sélectionner</button>
-    <button class="small-btn" id="selectNone">Tout désélectionner</button>
-    <span class="spacer"></span>
-    <button class="small-btn next-btn" id="nextPage" hidden>Page suivante</button>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><div class="flag"><span class="flag-star">★</span></div><div><strong>Media Select Pro</strong><span>Édition RDC · V7</span></div></div>
+    <nav class="nav">
+      <button class="active" data-view="download"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg><span>Télécharger</span></button>
+      <button data-view="history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg><span>Historique</span></button>
+    </nav>
+    <div class="country-note"><b>Fièrement inspiré par la RDC</b>Une expérience locale, claire et sécurisée.</div>
+  </aside>
+  <div class="main">
+    <header class="topbar"><div class="page-title" id="pageTitle">Téléchargement</div><div class="status"><i></i> Serveur local actif</div></header>
+    <main class="content">
+      <section class="view active" id="downloadView">
+        <div class="hero"><div><h1>Tes vidéos, ton choix.</h1><p>Analyse une playlist ou une chaîne, visualise chaque miniature et sélectionne précisément les vidéos à conserver.</p></div><div class="hero-badge"><div class="flag"><span class="flag-star">★</span></div> Expérience RDC</div></div>
+        <div class="search"><textarea id="sourceUrl" rows="1" placeholder="Colle le lien d’une vidéo, playlist ou chaîne YouTube…"></textarea><button class="primary" id="analyzeBtn">Afficher les vidéos</button></div>
+        <p class="helper">Tu peux aussi coller plusieurs liens individuels, un lien par ligne.</p>
+        <div class="notice" id="notice" role="alert"></div>
+        <div class="section-head" id="playlistHead"><div><h2 id="playlistTitle">Vidéos</h2><p id="playlistMeta"></p></div><div class="selected-count" id="selectionCount">0 sélectionnée</div></div>
+        <div class="toolbar" id="toolbar"><button class="secondary" id="selectAll">Tout sélectionner</button><button class="secondary" id="selectNone">Tout désélectionner</button><span class="space"></span><button class="secondary next" id="nextPage" hidden>Page suivante</button></div>
+        <section class="videos" id="videos" aria-live="polite"></section>
+        <section class="empty show" id="empty"><div><span class="empty-icon">▶</span><strong>Ta vidéothèque apparaîtra ici</strong>Colle un lien pour afficher les vidéos et leurs miniatures.</div></section>
+        <section class="download-panel" id="downloadPanel">
+          <div class="field"><label for="mediaMode">Format de sortie</label><select id="mediaMode"><option value="video_mp4">Vidéo MP4</option><option value="video_best">Vidéo qualité maximale</option><option value="audio_mp3">Audio MP3</option><option value="audio_m4a">Audio M4A</option><option value="audio_original">Audio original</option></select></div>
+          <div class="field"><label for="quality">Qualité vidéo</label><select id="quality"><option value="best">Meilleure disponible</option><option value="2160">2160p</option><option value="1440">1440p</option><option value="1080">1080p</option><option value="720">720p</option><option value="480">480p</option><option value="360">360p</option></select></div>
+          <div class="field"><label for="folder">Dossier de destination</label><div class="folder-row"><input id="folder" readonly placeholder="Choisir un dossier"><button id="folderBtn" title="Choisir un dossier">…</button></div><label class="option-line"><input type="checkbox" id="excludeShorts" checked> Exclure les Shorts des chaînes</label></div>
+          <button class="download" id="downloadBtn" disabled>Télécharger la sélection</button>
+        </section>
+        <section class="progress-panel" id="progressPanel"><div class="progress-head"><strong id="statusText">Prêt</strong><span id="progressText"></span><button class="cancel" id="cancelBtn">Arrêter</button></div><div class="bar"><i id="progressBar"></i></div><pre class="logs" id="logs">Le journal apparaîtra ici.</pre></section>
+      </section>
+      <section class="view" id="historyView">
+        <div class="history-head"><div><h1>Historique</h1><p>Les 100 derniers téléchargements lancés depuis cette application.</p></div></div>
+        <div class="history-list" id="historyList"><div class="history-empty">Chargement de l’historique…</div></div>
+      </section>
+    </main>
   </div>
-
-  <section class="videos" id="videos" aria-live="polite"></section>
-  <section class="empty show" id="empty"><div><strong>Ta sélection apparaîtra ici</strong>Colle une URL puis clique sur « Afficher les vidéos ».</div></section>
-
-  <section class="download-panel" id="downloadPanel">
-    <div class="field"><label for="mediaMode">Format</label><select id="mediaMode"><option value="video_mp4">Vidéo MP4</option><option value="video_best">Vidéo qualité maximale</option><option value="audio_mp3">Audio MP3</option><option value="audio_m4a">Audio M4A</option><option value="audio_original">Audio original</option></select></div>
-    <div class="field"><label for="quality">Qualité vidéo</label><select id="quality"><option value="best">Meilleure disponible</option><option value="2160">2160p</option><option value="1440">1440p</option><option value="1080">1080p</option><option value="720">720p</option><option value="480">480p</option><option value="360">360p</option></select></div>
-    <div class="field"><label for="folder">Dossier de destination</label><div class="folder-row"><input id="folder" readonly placeholder="Choisir un dossier"><button id="folderBtn" title="Choisir un dossier">…</button></div></div>
-    <div class="field"><label><input type="checkbox" id="excludeShorts" checked> Exclure les Shorts des chaînes</label></div>
-    <button class="download" id="downloadBtn" disabled>Télécharger</button>
-  </section>
-
-  <section class="progress-panel" id="progressPanel">
-    <div class="progress-head"><strong id="statusText">Prêt</strong><span id="progressText"></span><button class="cancel" id="cancelBtn">Arrêter</button></div>
-    <div class="bar"><i id="progressBar"></i></div>
-    <pre class="logs" id="logs">Le journal du téléchargement apparaîtra ici.</pre>
-  </section>
-</main>
+</div>
 <script>
 const TOKEN='__LOCAL_TOKEN__';
-const state={entries:[],selected:new Set(),effectiveUrl:'',nextPage:'',running:false};
+const state={entries:[],selected:new Set(),effectiveUrl:'',nextPage:'',running:false,site:''};
 const $=id=>document.getElementById(id);
-const sourceUrl=$('sourceUrl'),analyzeBtn=$('analyzeBtn'),videos=$('videos'),empty=$('empty'),notice=$('notice');
-
-async function api(path,data){
-  const response=await fetch('/api/'+path,{method:'POST',headers:{'Content-Type':'application/json','X-Local-Token':TOKEN},body:JSON.stringify(data||{})});
-  const result=await response.json();
-  if(!response.ok) throw new Error(result.error||'Une erreur est survenue.');
-  return result;
-}
+async function api(path,data){const response=await fetch('/api/'+path,{method:'POST',headers:{'Content-Type':'application/json','X-Local-Token':TOKEN},body:JSON.stringify(data||{})});const result=await response.json();if(!response.ok)throw new Error(result.error||'Une erreur est survenue.');return result;}
 function escapeHtml(value){return String(value||'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
-function formatDuration(seconds){if(seconds==null)return'';const h=Math.floor(seconds/3600),m=Math.floor(seconds%3600/60),s=seconds%60;return h?`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${m}:${String(s).padStart(2,'0')}`;}
-function showNotice(message,isError=false){notice.textContent=message||'';notice.className='notice'+(message?' show':'')+(isError?' error':'');}
-function updateSelection(){
-  document.querySelectorAll('.video-card').forEach(card=>card.classList.toggle('selected',state.selected.has(Number(card.dataset.index))));
-  const n=state.selected.size,total=state.entries.filter(e=>!e.nested).length;
-  $('selectionCount').textContent=`${n} sélectionnée${n>1?'s':''} sur ${total}`;
-  $('downloadBtn').disabled=!n||!$('folder').value||state.running;
-}
+function duration(value){if(value==null)return'';const h=Math.floor(value/3600),m=Math.floor(value%3600/60),s=value%60;return h?`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${m}:${String(s).padStart(2,'0')}`;}
+function showNotice(message,error=false){$('notice').textContent=message||'';$('notice').className='notice'+(message?' show':'')+(error?' error':'');}
+function thumbnailFor(entry){if(entry.thumbnail)return entry.thumbnail;if(state.site==='YouTube'&&/^[\w-]{11}$/.test(entry.id||''))return`https://i.ytimg.com/vi/${entry.id}/hqdefault.jpg`;return'';}
+function updateSelection(){document.querySelectorAll('.video-card').forEach(card=>card.classList.toggle('selected',state.selected.has(Number(card.dataset.index))));const total=state.entries.filter(e=>!e.nested).length,n=state.selected.size;$('selectionCount').textContent=`${n} sélectionnée${n>1?'s':''} sur ${total}`;$('downloadBtn').disabled=!n||!$('folder').value||state.running;}
 function renderEntries(){
-  videos.innerHTML='';
-  state.entries.forEach(entry=>{
-    const card=document.createElement('article');card.className='video-card'+(entry.nested?' disabled':'');card.dataset.index=entry.index;
-    const image=entry.thumbnail?`<img src="${escapeHtml(entry.thumbnail)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.innerHTML='<span class=&quot;thumb-fallback&quot;>▶</span>'">`:'<span class="thumb-fallback">▶</span>';
-    card.innerHTML=`<input class="card-check" type="checkbox" aria-label="Sélectionner ${escapeHtml(entry.title)}" ${state.selected.has(entry.index)?'checked':''} ${entry.nested?'disabled':''}><div class="thumb">${image}${entry.duration!=null?`<span class="duration">${formatDuration(entry.duration)}</span>`:''}${entry.short?'<span class="badge">SHORT</span>':''}</div><div class="video-info"><h2 class="video-title">${escapeHtml(entry.title)}</h2><div class="video-meta">${escapeHtml(entry.channel||entry.site||'Vidéo')} ${entry.nested?' · Playlist imbriquée':''}</div></div>`;
-    if(!entry.nested){card.addEventListener('click',event=>{if(event.target.tagName!=='INPUT')card.querySelector('input').checked=!card.querySelector('input').checked;const checked=card.querySelector('input').checked;checked?state.selected.add(entry.index):state.selected.delete(entry.index);updateSelection();});card.querySelector('input').addEventListener('change',event=>{event.target.checked?state.selected.add(entry.index):state.selected.delete(entry.index);updateSelection();});}
-    videos.appendChild(card);
-  });
-  empty.classList.toggle('show',!state.entries.length);$('playlistHead').classList.toggle('show',!!state.entries.length);$('toolbar').classList.toggle('show',!!state.entries.length);$('downloadPanel').classList.toggle('show',!!state.entries.length);updateSelection();
+  $('videos').innerHTML='';
+  state.entries.forEach(entry=>{const card=document.createElement('article');card.className='video-card'+(entry.nested?' disabled':'');card.dataset.index=entry.index;const thumb=thumbnailFor(entry);card.innerHTML=`<input class="card-check" type="checkbox" aria-label="Sélectionner ${escapeHtml(entry.title)}" ${state.selected.has(entry.index)?'checked':''} ${entry.nested?'disabled':''}><div class="thumb">${thumb?`<img src="${escapeHtml(thumb)}" alt="Miniature de ${escapeHtml(entry.title)}" loading="lazy" referrerpolicy="no-referrer">`:'<span class="thumb-fallback">▶</span>'}${entry.duration!=null?`<span class="duration">${duration(entry.duration)}</span>`:''}${entry.short?'<span class="badge">SHORT</span>':''}</div><div class="video-info"><h3 class="video-title">${escapeHtml(entry.title)}</h3><div class="video-meta">${escapeHtml(entry.channel||entry.site||state.site||'Vidéo')}${entry.nested?' · Playlist imbriquée':''}</div></div>`;const image=card.querySelector('img');if(image)image.addEventListener('error',()=>{image.replaceWith(Object.assign(document.createElement('span'),{className:'thumb-fallback',textContent:'▶'}));});if(!entry.nested){const input=card.querySelector('input');card.addEventListener('click',event=>{if(event.target!==input)input.checked=!input.checked;input.checked?state.selected.add(entry.index):state.selected.delete(entry.index);updateSelection();});input.addEventListener('click',event=>event.stopPropagation());input.addEventListener('change',()=>{input.checked?state.selected.add(entry.index):state.selected.delete(entry.index);updateSelection();});}$('videos').appendChild(card);});
+  const present=state.entries.length>0;$('empty').classList.toggle('show',!present);$('playlistHead').classList.toggle('show',present);$('toolbar').classList.toggle('show',present);$('downloadPanel').classList.toggle('show',present);updateSelection();
 }
-async function analyze(urlOverride){
-  const url=(urlOverride||sourceUrl.value).trim();if(!url){showNotice('Colle d’abord une URL.',true);return;}
-  analyzeBtn.disabled=true;analyzeBtn.textContent='Analyse en cours…';showNotice('');empty.classList.add('show');empty.innerHTML='<div><strong>Analyse de la liste…</strong>Les titres et miniatures vont apparaître ici.</div>';videos.innerHTML='';
-  try{
-    const result=await api('preview',{url,exclude_shorts:$('excludeShorts').checked});
-    sourceUrl.value=result.effective_url||url;state.effectiveUrl=result.effective_url||url;state.entries=result.entries||[];state.selected=new Set(state.entries.filter(e=>!e.nested).slice(0,5).map(e=>e.index));state.nextPage=result.next_page||'';
-    $('playlistTitle').textContent=result.title||'Vidéos';$('playlistMeta').textContent=[result.site,`${state.entries.length} élément${state.entries.length>1?'s':''}`,result.truncated?`aperçu limité à ${result.preview_limit}`:''].filter(Boolean).join(' · ');$('nextPage').hidden=!state.nextPage;
-    if(result.warning)showNotice(result.warning);else if(result.adjusted_channel)showNotice('La chaîne a été ouverte sur son onglet Vidéos.');
-    renderEntries();
-  }catch(error){state.entries=[];state.selected.clear();empty.innerHTML='<div><strong>Aucune vidéo affichée</strong>Vérifie le lien puis relance l’analyse.</div>';renderEntries();empty.classList.add('show');showNotice(error.message,true);}
-  finally{analyzeBtn.disabled=false;analyzeBtn.textContent='Afficher les vidéos';}
-}
-analyzeBtn.addEventListener('click',()=>analyze());sourceUrl.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();analyze();}});
-$('selectAll').addEventListener('click',()=>{state.selected=new Set(state.entries.filter(e=>!e.nested).map(e=>e.index));document.querySelectorAll('.card-check:not(:disabled)').forEach(e=>e.checked=true);updateSelection();});
-$('selectNone').addEventListener('click',()=>{state.selected.clear();document.querySelectorAll('.card-check').forEach(e=>e.checked=false);updateSelection();});
-$('nextPage').addEventListener('click',()=>{if(state.nextPage){sourceUrl.value=state.nextPage;analyze(state.nextPage);}});
-$('folderBtn').addEventListener('click',async()=>{try{const result=await api('folder');if(result.folder){$('folder').value=result.folder;updateSelection();}}catch(error){showNotice(error.message,true);}});
-$('mediaMode').addEventListener('change',()=>{$('quality').disabled=!$('mediaMode').value.startsWith('video_');});
-$('downloadBtn').addEventListener('click',async()=>{
-  if(!state.selected.size)return;try{await api('start',{url:state.effectiveUrl,folder:$('folder').value,mode:$('mediaMode').value,quality:$('quality').value,selection:'selected',indices:[...state.selected].sort((a,b)=>a-b),exclude_shorts:$('excludeShorts').checked});state.running=true;$('progressPanel').classList.add('show');$('downloadBtn').disabled=true;showNotice('');pollStatus();}catch(error){showNotice(error.message,true);}
-});
-$('cancelBtn').addEventListener('click',async()=>{try{await api('cancel');}catch(error){showNotice(error.message,true);}});
-let pollTimer;
-async function pollStatus(){
-  clearTimeout(pollTimer);try{const response=await fetch('/api/status',{cache:'no-store'}),result=await response.json();state.running=!!result.running;$('statusText').textContent=result.status||'Prêt';$('progressText').textContent=result.progress||'';$('progressBar').style.width=result.progress||'0%';$('logs').textContent=(result.logs||[]).join('\n')||'En attente du journal…';$('logs').scrollTop=$('logs').scrollHeight;$('cancelBtn').hidden=!result.running;updateSelection();if(result.running)pollTimer=setTimeout(pollStatus,900);}catch(error){pollTimer=setTimeout(pollStatus,1800);}
-}
+async function analyze(urlOverride){const url=(urlOverride||$('sourceUrl').value).trim();if(!url){showNotice('Colle d’abord un lien.',true);return;}$('analyzeBtn').disabled=true;$('analyzeBtn').textContent='Analyse en cours…';showNotice('');$('videos').innerHTML='';$('empty').classList.add('show');$('empty').innerHTML='<div><span class="empty-icon">◌</span><strong>Analyse de la playlist…</strong>Récupération des titres et des miniatures.</div>';try{const result=await api('preview',{url,exclude_shorts:$('excludeShorts').checked});$('sourceUrl').value=result.effective_url||url;state.effectiveUrl=result.effective_url||url;state.entries=result.entries||[];state.selected.clear();state.nextPage=result.next_page||'';state.site=result.site||'';$('playlistTitle').textContent=result.title||'Vidéos';$('playlistMeta').textContent=[result.site,`${state.entries.length} élément${state.entries.length>1?'s':''}`,result.truncated?`aperçu limité à ${result.preview_limit}`:''].filter(Boolean).join(' · ');$('nextPage').hidden=!state.nextPage;if(result.warning)showNotice(result.warning);else if(result.adjusted_channel)showNotice('La chaîne a été ouverte directement sur son onglet Vidéos.');renderEntries();}catch(error){state.entries=[];state.selected.clear();$('empty').innerHTML='<div><span class="empty-icon">!</span><strong>Impossible d’afficher les vidéos</strong>Vérifie le lien puis recommence.</div>';renderEntries();$('empty').classList.add('show');showNotice(error.message,true);}finally{$('analyzeBtn').disabled=false;$('analyzeBtn').textContent='Afficher les vidéos';}}
+function formatMode(mode,quality){const modes={video_mp4:'Vidéo MP4',video_best:'Vidéo maximale',audio_mp3:'Audio MP3',audio_m4a:'Audio M4A',audio_original:'Audio original'};return(modes[mode]||mode)+(mode&&mode.startsWith('video_')&&quality!=='best'?` · ${quality}p`:'');}
+function formatDate(value){if(!value)return'';const date=new Date(value);return Number.isNaN(date.getTime())?value:date.toLocaleString('fr-FR',{dateStyle:'medium',timeStyle:'short'});}
+async function loadHistory(){try{const result=await api('history');const entries=result.entries||[];$('historyList').innerHTML=entries.length?entries.map(entry=>{const error=!['Terminé','En cours'].includes(entry.status);return`<article class="history-card"><div class="history-icon">↓</div><div><h3>${escapeHtml(entry.title)}</h3><div class="history-meta">${formatDate(entry.created_at)} · ${entry.count} vidéo${entry.count>1?'s':''} · ${escapeHtml(formatMode(entry.mode,entry.quality))}</div><div class="history-items">${escapeHtml((entry.items||[]).join(' · ')||entry.folder)}</div></div><span class="history-status${error?' error':''}">${escapeHtml(entry.status)}</span></article>`;}).join(''):'<div class="history-empty"><strong>Aucun téléchargement pour le moment</strong><br>L’historique se remplira automatiquement.</div>';}catch(error){$('historyList').innerHTML=`<div class="history-empty">${escapeHtml(error.message)}</div>`;}}
+document.querySelectorAll('.nav button').forEach(button=>button.addEventListener('click',()=>{document.querySelectorAll('.nav button').forEach(item=>item.classList.toggle('active',item===button));document.querySelectorAll('.view').forEach(view=>view.classList.remove('active'));$(button.dataset.view+'View').classList.add('active');$('pageTitle').textContent=button.dataset.view==='history'?'Historique':'Téléchargement';if(button.dataset.view==='history')loadHistory();}));
+$('analyzeBtn').addEventListener('click',()=>analyze());$('sourceUrl').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();analyze();}});$('selectAll').addEventListener('click',()=>{state.selected=new Set(state.entries.filter(e=>!e.nested).map(e=>e.index));document.querySelectorAll('.card-check:not(:disabled)').forEach(e=>e.checked=true);updateSelection();});$('selectNone').addEventListener('click',()=>{state.selected.clear();document.querySelectorAll('.card-check').forEach(e=>e.checked=false);updateSelection();});$('nextPage').addEventListener('click',()=>{if(state.nextPage){$('sourceUrl').value=state.nextPage;analyze(state.nextPage);}});
+$('folderBtn').addEventListener('click',async()=>{try{const result=await api('folder');if(result.folder){$('folder').value=result.folder;updateSelection();}}catch(error){showNotice(error.message,true);}});$('mediaMode').addEventListener('change',()=>{$('quality').disabled=!$('mediaMode').value.startsWith('video_');});
+$('downloadBtn').addEventListener('click',async()=>{if(!state.selected.size)return;try{await api('start',{url:state.effectiveUrl,folder:$('folder').value,mode:$('mediaMode').value,quality:$('quality').value,selection:'selected',indices:[...state.selected].sort((a,b)=>a-b),exclude_shorts:$('excludeShorts').checked});state.running=true;$('progressPanel').classList.add('show');$('downloadBtn').disabled=true;showNotice('');pollStatus();}catch(error){showNotice(error.message,true);}});$('cancelBtn').addEventListener('click',async()=>{try{await api('cancel');}catch(error){showNotice(error.message,true);}});
+let pollTimer;async function pollStatus(){clearTimeout(pollTimer);try{const response=await fetch('/api/status',{cache:'no-store'}),result=await response.json(),wasRunning=state.running;state.running=!!result.running;$('statusText').textContent=result.status||'Prêt';$('progressText').textContent=result.progress||'';$('progressBar').style.width=result.progress||'0%';$('logs').textContent=(result.logs||[]).join('\n')||'En attente du journal…';$('logs').scrollTop=$('logs').scrollHeight;$('cancelBtn').hidden=!result.running;updateSelection();if(result.running)pollTimer=setTimeout(pollStatus,900);else if(wasRunning)loadHistory();}catch(error){pollTimer=setTimeout(pollStatus,1800);}}
+pollStatus();
 </script>
 </body>
 </html>
