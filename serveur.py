@@ -1,0 +1,367 @@
+"""Interface locale de Media Select Pro V6. Aucun serveur externe."""
+from __future__ import annotations
+import argparse
+import hmac
+import json
+import os
+import re
+import secrets
+import shutil
+import subprocess
+import sys
+import threading
+import time
+import webbrowser
+from collections import deque
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import urlsplit
+
+from decouverte import discover, is_listing_page
+
+from moteur import (make_download_command, make_preview_command, normalize_channel,
+                    parse_entries, validate_url, parse_source_urls, recognize_site,
+                    PREVIEW_LIMIT, MODES, QUALITIES)
+
+BASE = Path(__file__).resolve().parent
+
+
+class State:
+    def __init__(self):
+        self.lock = threading.RLock()
+        self.token = secrets.token_urlsafe(24)
+        self.process = None
+        self.preview_process = None
+        self.running = False
+        self.previewing = False
+        self.status = "Prêt"
+        self.progress = ""
+        self.logs = deque(maxlen=180)
+        self.cancel_requested = False
+        self.last_command_mode = ""
+        self.errors = 0
+        self.preview_urls = ()
+        self.preview_valid_indices = set()
+        self.preview_has_playlist = False
+        self.preview_discovered = {}
+        self.preview_discovery_mode = False
+
+    def log(self, line):
+        with self.lock:
+            self.logs.append(line[:800])
+            if "[download]" in line:
+                found = re.search(r"\b(\d+(?:\.\d+)?)%", line)
+                if found:
+                    self.progress = found.group(1) + "%"
+                if "Downloading item" in line:
+                    self.status = line.strip().replace("[download]", "").strip()
+            elif "ERROR:" in line:
+                self.errors += 1
+                self.status = "Erreur rencontrée, voir le journal"
+
+    def snapshot(self):
+        with self.lock:
+            return {"running": self.running, "previewing": self.previewing,
+                    "status": self.status, "progress": self.progress, "logs": list(self.logs),
+                    "errors": self.errors,
+                    "ffmpeg": shutil.which("ffmpeg") is not None,
+                    "deno": shutil.which("deno") is not None,
+                    "python": sys.version.split()[0]}
+
+STATE = State()
+
+
+def terminate(proc):
+    if proc and proc.poll() is None:
+        try:
+            proc.terminate()
+            proc.wait(timeout=4)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+        except (OSError, ProcessLookupError):
+            pass
+
+
+def work_download(commands):
+    """Télécharge par petits lots pour éviter les lignes de commandes trop longues sous Windows."""
+    if commands and isinstance(commands[0], str):
+        commands = [commands]
+    failed = 0
+    try:
+        for number, cmd in enumerate(commands, 1):
+            with STATE.lock:
+                if STATE.cancel_requested:
+                    STATE.status = "Téléchargement arrêté"
+                    break
+                STATE.status = f"Traitement du lot {number}/{len(commands)}"
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                    text=True, encoding="utf-8", errors="replace", bufsize=1,
+                                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            with STATE.lock:
+                STATE.process = proc
+                cancelled = STATE.cancel_requested
+            if cancelled:
+                terminate(proc)
+            for line in proc.stdout:
+                STATE.log(line.rstrip())
+            code = proc.wait()
+            failed += int(code != 0)
+        with STATE.lock:
+            if STATE.cancel_requested:
+                STATE.status = "Téléchargement arrêté par l'utilisateur"
+            elif failed or STATE.errors:
+                STATE.status = (f"Terminé avec {STATE.errors} erreur(s) affichée(s) "
+                                f"et {failed} lot(s) en échec. Consulte le journal.")
+            else:
+                STATE.status = "Traitement terminé. Vérifie les fichiers créés et le journal."
+                STATE.progress = "100%"
+    except Exception as exc:
+        STATE.log(f"Erreur interne : {exc}")
+        with STATE.lock:
+            STATE.status = f"Échec du lancement : {exc}"
+    finally:
+        with STATE.lock:
+            STATE.running = False
+            STATE.process = None
+
+
+def preview_one(url):
+    """Exécute yt-dlp en lecture seule pour un lien, sans télécharger de média."""
+    cmd = make_preview_command(sys.executable, url)
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                         encoding="utf-8", errors="replace",
+                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    with STATE.lock:
+        STATE.preview_process = p
+    try:
+        try:
+            stdout, stderr = p.communicate(timeout=120)
+        except subprocess.TimeoutExpired:
+            terminate(p)
+            raise ValueError("Analyse trop longue : essaie le lien d'une vidéo précise.")
+        if p.returncode != 0 or not stdout.strip():
+            lines = (stderr or "").strip().splitlines()
+            detail = lines[-1] if lines else "Lien non reconnu ou média inaccessible."
+            raise ValueError(detail[:400])
+        try:
+            data = json.loads(stdout)
+        except json.JSONDecodeError:
+            raise ValueError("Le site n'a pas renvoyé une liste exploitable.")
+        return parse_entries(data)
+    finally:
+        with STATE.lock:
+            STATE.preview_process = None
+
+
+def preview(urls):
+    """Liste native d'un site OU ensemble de liens vidéo unitaires.
+
+    Une page de recherche non prise en charge ne doit jamais être considérée
+    comme une playlist téléchargeable.
+    """
+    with STATE.lock:
+        if STATE.previewing or STATE.running:
+            raise ValueError("Une autre opération est en cours.")
+        STATE.previewing = True
+        STATE.preview_urls = ()
+        STATE.preview_valid_indices = set()
+        STATE.preview_discovered = {}
+        STATE.preview_discovery_mode = False
+    try:
+        if len(urls) == 1:
+            if is_listing_page(urls[0]):
+                result = discover(urls[0])
+            else:
+                result = preview_one(urls[0])
+        else:
+            items = []
+            for index, url in enumerate(urls, 1):
+                try:
+                    info = preview_one(url)
+                except ValueError as exc:
+                    raise ValueError(f"Lien {index} ({recognize_site(url)}) : {exc}") from exc
+                if len(info["entries"]) != 1 or info["entries"][0]["nested"]:
+                    raise ValueError(f"Lien {index} : colle une URL de vidéo individuelle et non une page contenant plusieurs vidéos.")
+                item = dict(info["entries"][0])
+                item["index"] = index
+                item["site"] = recognize_site(url)
+                items.append(item)
+            result = {"title": f"Sélection de {len(items)} liens", "entries": items,
+                      "truncated": False, "has_playlist": True, "batch_links": True}
+        result["site"] = recognize_site(urls[0]) if len(urls) == 1 else "Plusieurs sites"
+        result.setdefault("batch_links", False)
+        with STATE.lock:
+            STATE.preview_urls = tuple(urls)
+            STATE.preview_valid_indices = {e["index"] for e in result["entries"] if not e["nested"]}
+            STATE.preview_has_playlist = bool(result["has_playlist"])
+            STATE.preview_discovery_mode = bool(result.get("discovered_links"))
+            STATE.preview_discovered = ({e["index"]: e["url"] for e in result["entries"]}
+                                        if STATE.preview_discovery_mode else {})
+        return result
+    finally:
+        with STATE.lock:
+            STATE.previewing = False
+            STATE.preview_process = None
+
+
+def choose_folder():
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        selected = filedialog.askdirectory(title="Choisir le dossier pour les téléchargements")
+        root.destroy()
+        return selected or None
+    except Exception:
+        return None
+
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = "MediaSelectPro/7.0"
+
+    def log_message(self, fmt, *args):
+        pass
+
+    def response(self, status, obj):
+        raw = json.dumps(obj, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(raw)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.end_headers()
+        self.wfile.write(raw)
+
+    def do_GET(self):
+        if self.path in ("/", "/index.html"):
+            html = (BASE / "interface.html").read_text(encoding="utf-8")
+            html = html.replace("__LOCAL_TOKEN__", STATE.token)
+            raw = html.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(raw)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Frame-Options", "DENY")
+            self.send_header("Content-Security-Policy", "default-src 'self'; style-src 'unsafe-inline' 'self'; script-src 'unsafe-inline' 'self'; connect-src 'self'; img-src 'self' data:")
+            self.end_headers()
+            self.wfile.write(raw)
+        elif self.path == "/api/status":
+            self.response(200, STATE.snapshot())
+        else:
+            self.response(404, {"error": "Ressource introuvable"})
+
+    def do_POST(self):
+        # Requests only from our UI, with a per-session token. Nothing is served on the network.
+        if not hmac.compare_digest(self.headers.get("X-Local-Token", ""), STATE.token):
+            return self.response(403, {"error": "Accès refusé"})
+        try:
+            size = int(self.headers.get("Content-Length", "0"))
+            if size < 0 or size > 40000:
+                raise ValueError("Requête trop longue")
+            data = json.loads(self.rfile.read(size) or b"{}")
+            if not isinstance(data, dict):
+                raise ValueError("Requête invalide")
+            if self.path == "/api/preview":
+                urls = parse_source_urls(data.get("url", ""))
+                adjusted = False
+                if len(urls) == 1:
+                    urls[0], adjusted = normalize_channel(urls[0], bool(data.get("exclude_shorts", True)))
+                result = preview(urls)
+                result["effective_url"] = "\n".join(urls)
+                result["adjusted_channel"] = adjusted
+                result["preview_limit"] = PREVIEW_LIMIT
+                return self.response(200, result)
+            if self.path == "/api/folder":
+                value = choose_folder()
+                return self.response(200, {"folder": value})
+            if self.path == "/api/start":
+                urls = parse_source_urls(data.get("url", ""))
+                if len(urls) == 1:
+                    urls[0], _ = normalize_channel(urls[0], bool(data.get("exclude_shorts", True)))
+                mode = data.get("mode")
+                quality = data.get("quality", "best")
+                selection = data.get("selection", "selected")
+                if selection not in {"selected", "all"}:
+                    raise ValueError("Choix de la sélection incorrect")
+                indices = data.get("indices") if selection == "selected" else None
+                with STATE.lock:
+                    if STATE.running or STATE.previewing:
+                        raise ValueError("Une opération est déjà en cours.")
+                    if not STATE.preview_urls or STATE.preview_urls != tuple(urls):
+                        raise ValueError("Analyse d'abord ces liens avant de télécharger.")
+                    if indices is not None:
+                        if not isinstance(indices, list) or not indices or any(type(i) is not int for i in indices):
+                            raise ValueError("Sélection d'éléments incorrecte.")
+                        if not set(indices).issubset(STATE.preview_valid_indices):
+                            raise ValueError("La sélection ne correspond pas à la liste analysée.")
+                    discovered = dict(STATE.preview_discovered)
+                    if STATE.preview_discovery_mode:
+                        if not discovered:
+                            raise ValueError("Aucun lien vidéo détecté sur cette page.")
+                        # Liens issus de la page analysée : jamais l'URL du profil ou de l'accueil.
+                        order = sorted(discovered)
+                        choices = order if indices is None else [n for n in order if n in indices]
+                        target = [discovered[n] for n in choices]
+                        effective_indices = None
+                    elif len(urls) > 1:
+                        target = [u for pos, u in enumerate(urls, 1) if indices is None or pos in indices]
+                        effective_indices = None
+                    else:
+                        target = urls[0]
+                        effective_indices = indices if STATE.preview_has_playlist else None
+                    if isinstance(target, list) and not target:
+                        raise ValueError("Aucune vidéo sélectionnée.")
+                    if isinstance(target, list):
+                        # 8 vidéos par commande : sécurité pour cmd.exe / CreateProcess Windows.
+                        commands = [make_download_command(sys.executable, target[j:j + 8],
+                                     str(data.get("folder") or ""), mode, quality, None,
+                                     direct_links=True) for j in range(0, len(target), 8)]
+                    else:
+                        commands = [make_download_command(sys.executable, target,
+                                    str(data.get("folder") or ""), mode, quality, effective_indices)]
+                    STATE.logs.clear()
+                    STATE.errors = 0
+                    STATE.status = "Démarrage du téléchargement"
+                    STATE.progress = ""
+                    STATE.running = True
+                    STATE.cancel_requested = False
+                    STATE.last_command_mode = mode
+                threading.Thread(target=work_download, args=(commands,), daemon=True).start()
+                return self.response(200, {"ok": True})
+            if self.path == "/api/cancel":
+                with STATE.lock:
+                    if not STATE.running:
+                        return self.response(200, {"ok": True})
+                    STATE.cancel_requested = True
+                    proc = STATE.process
+                if proc:
+                    threading.Thread(target=terminate, args=(proc,), daemon=True).start()
+                return self.response(200, {"ok": True})
+            return self.response(404, {"error": "Action inconnue"})
+        except Exception as exc:
+            self.response(400, {"error": str(exc)[:500]})
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Téléchargeur local multi-sites")
+    parser.add_argument("--no-browser", action="store_true")
+    args = parser.parse_args()
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    url = f"http://127.0.0.1:{server.server_address[1]}"
+    print(f"Media Select Pro V7 : {url}", flush=True)
+    print("Garde cette fenêtre ouverte. Ctrl+C pour quitter.", flush=True)
+    if not args.no_browser:
+        threading.Timer(0.8, lambda: webbrowser.open(url)).start()
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        terminate(STATE.process)
+        terminate(STATE.preview_process)
+        server.server_close()
+
+if __name__ == "__main__":
+    main()
