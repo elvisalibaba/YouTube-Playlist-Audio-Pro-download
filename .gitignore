@@ -6,6 +6,9 @@ historique.json
 historique.json.tmp
 telechargements.json
 telechargements.json.tmp
+media_select.db
+media_select.db-shm
+media_select.db-wal
 build/
 dist/
 *.spec

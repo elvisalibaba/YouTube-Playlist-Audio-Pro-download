@@ -9,10 +9,12 @@ Application Python locale avec interface Web pour analyser et télécharger des 
 - Sélection individuelle ou groupée des éléments à télécharger.
 - Interface professionnelle en trois zones : navigation, bibliothèque YouTube et centre de téléchargement.
 - Identité visuelle inspirée des couleurs de la République démocratique du Congo.
+- Mémoire SQLite locale (`media_select.db`) pour conserver l'historique, les téléchargements et les préférences.
 - Historique local persistant des 100 derniers téléchargements.
 - Détection des vidéos déjà téléchargées selon le format et la qualité choisis.
 - Lecture automatique des archives existantes dans le dossier de destination pour éviter les doublons.
 - Classement automatique dans `Dossier mère\Audio` ou `Dossier mère\Video` selon le type choisi.
+- Restauration automatique du dernier dossier mère sélectionné au prochain démarrage.
 - Téléchargement dans le format audio original, MP3 ou M4A.
 - Téléchargement vidéo en qualité maximale ou en MP4 avec une résolution choisie.
 - Affichage de la progression et des erreurs dans le journal de l'application.

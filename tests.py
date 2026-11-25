@@ -179,6 +179,12 @@ class TestServeur(unittest.TestCase):
         code,raw=self.call('/api/cancel',{},False)
         self.assertEqual(code,403)
 
+    def test_sqlite_setting_is_persistent(self):
+        serveur.save_setting('test_parent_folder', 'C:/Media')
+        self.assertEqual(serveur.get_setting('test_parent_folder'), 'C:/Media')
+        with serveur.database_connection() as connection:
+            connection.execute("DELETE FROM settings WHERE setting_key=?", ('test_parent_folder',))
+
     def test_youtube_thumbnail_is_served_locally(self):
         image = b'\xff\xd8fake-jpeg\xff\xd9'
         with patch.object(serveur, 'fetch_youtube_thumbnail', return_value=image):

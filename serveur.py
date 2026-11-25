@@ -7,12 +7,14 @@ import os
 import re
 import secrets
 import shutil
+import sqlite3
 import subprocess
 import sys
 import threading
 import time
 import webbrowser
 from collections import deque
+from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib import request as urlrequest
@@ -30,8 +32,74 @@ BASE = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 DATA_BASE = Path(sys.executable).resolve().parent if FROZEN else BASE
 HISTORY_FILE = DATA_BASE / "historique.json"
 DOWNLOADS_FILE = DATA_BASE / "telechargements.json"
+DATABASE_FILE = DATA_BASE / "media_select.db"
 THUMBNAIL_CACHE = {}
 THUMBNAIL_LOCK = threading.Lock()
+
+
+@contextmanager
+def database_connection():
+    connection = sqlite3.connect(DATABASE_FILE, timeout=10)
+    connection.row_factory = sqlite3.Row
+    try:
+        yield connection
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def initialize_database():
+    with database_connection() as connection:
+        connection.execute("PRAGMA journal_mode=WAL")
+        connection.execute("""CREATE TABLE IF NOT EXISTS history (
+            id TEXT PRIMARY KEY, created_at TEXT NOT NULL, completed_at TEXT,
+            title TEXT NOT NULL, count INTEGER NOT NULL, mode TEXT NOT NULL,
+            quality TEXT NOT NULL, folder TEXT NOT NULL, items_json TEXT NOT NULL,
+            status TEXT NOT NULL)""")
+        connection.execute("""CREATE TABLE IF NOT EXISTS downloads (
+            record_key TEXT PRIMARY KEY, media_id TEXT NOT NULL, title TEXT NOT NULL,
+            thumbnail TEXT NOT NULL, mode TEXT NOT NULL, quality TEXT NOT NULL,
+            folder TEXT NOT NULL, downloaded_at TEXT NOT NULL)""")
+        connection.execute("""CREATE TABLE IF NOT EXISTS settings (
+            setting_key TEXT PRIMARY KEY, setting_value TEXT NOT NULL)""")
+        if connection.execute("SELECT COUNT(*) FROM history").fetchone()[0] == 0:
+            try:
+                legacy_history = json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
+            except (OSError, ValueError, TypeError):
+                legacy_history = []
+            for entry in legacy_history[:100] if isinstance(legacy_history, list) else []:
+                connection.execute("""INSERT OR IGNORE INTO history VALUES (?,?,?,?,?,?,?,?,?,?)""", (
+                    entry.get("id", secrets.token_hex(8)), entry.get("created_at", ""),
+                    entry.get("completed_at"), entry.get("title", "Téléchargement"),
+                    int(entry.get("count", 0)), entry.get("mode", ""), entry.get("quality", "best"),
+                    entry.get("folder", ""), json.dumps(entry.get("items", []), ensure_ascii=False),
+                    entry.get("status", "Terminé")))
+        if connection.execute("SELECT COUNT(*) FROM downloads").fetchone()[0] == 0:
+            try:
+                legacy_downloads = json.loads(DOWNLOADS_FILE.read_text(encoding="utf-8"))
+            except (OSError, ValueError, TypeError):
+                legacy_downloads = {}
+            for key, entry in legacy_downloads.items() if isinstance(legacy_downloads, dict) else []:
+                connection.execute("""INSERT OR IGNORE INTO downloads VALUES (?,?,?,?,?,?,?,?)""", (
+                    key, entry.get("id", ""), entry.get("title", ""), entry.get("thumbnail", ""),
+                    entry.get("mode", ""), entry.get("quality", "best"), entry.get("folder", ""),
+                    entry.get("downloaded_at", "")))
+
+
+def get_setting(key, default=""):
+    with database_connection() as connection:
+        row = connection.execute("SELECT setting_value FROM settings WHERE setting_key=?", (key,)).fetchone()
+    return row[0] if row else default
+
+
+def save_setting(key, value):
+    with database_connection() as connection:
+        connection.execute("""INSERT INTO settings(setting_key, setting_value) VALUES(?,?)
+                            ON CONFLICT(setting_key) DO UPDATE SET setting_value=excluded.setting_value""",
+                           (key, str(value)))
 
 
 def yt_dlp_runtime():
@@ -95,35 +163,39 @@ class State:
 
     @staticmethod
     def _load_history():
-        try:
-            data = json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
-            return data[:100] if isinstance(data, list) else []
-        except (OSError, ValueError, TypeError):
-            return []
+        with database_connection() as connection:
+            rows = connection.execute("SELECT * FROM history ORDER BY created_at DESC LIMIT 100").fetchall()
+        return [{"id": row["id"], "created_at": row["created_at"],
+                 "completed_at": row["completed_at"], "title": row["title"],
+                 "count": row["count"], "mode": row["mode"], "quality": row["quality"],
+                 "folder": row["folder"], "items": json.loads(row["items_json"] or "[]"),
+                 "status": row["status"]} for row in rows]
 
     def _save_history(self):
-        try:
-            temporary = HISTORY_FILE.with_suffix(".json.tmp")
-            temporary.write_text(json.dumps(self.history[:100], ensure_ascii=False, indent=2), encoding="utf-8")
-            temporary.replace(HISTORY_FILE)
-        except OSError:
-            pass
+        with database_connection() as connection:
+            connection.execute("DELETE FROM history")
+            connection.executemany("INSERT INTO history VALUES (?,?,?,?,?,?,?,?,?,?)", [(
+                entry["id"], entry.get("created_at", ""), entry.get("completed_at"),
+                entry.get("title", "Téléchargement"), int(entry.get("count", 0)),
+                entry.get("mode", ""), entry.get("quality", "best"), entry.get("folder", ""),
+                json.dumps(entry.get("items", []), ensure_ascii=False), entry.get("status", "Terminé"))
+                for entry in self.history[:100]])
 
     @staticmethod
     def _load_downloads():
-        try:
-            data = json.loads(DOWNLOADS_FILE.read_text(encoding="utf-8"))
-            return data if isinstance(data, dict) else {}
-        except (OSError, ValueError, TypeError):
-            return {}
+        with database_connection() as connection:
+            rows = connection.execute("SELECT * FROM downloads").fetchall()
+        return {row["record_key"]: {"id": row["media_id"], "title": row["title"],
+                "thumbnail": row["thumbnail"], "mode": row["mode"], "quality": row["quality"],
+                "folder": row["folder"], "downloaded_at": row["downloaded_at"]} for row in rows}
 
     def _save_downloads(self):
-        try:
-            temporary = DOWNLOADS_FILE.with_suffix(".json.tmp")
-            temporary.write_text(json.dumps(self.downloads, ensure_ascii=False, indent=2), encoding="utf-8")
-            temporary.replace(DOWNLOADS_FILE)
-        except OSError:
-            pass
+        with database_connection() as connection:
+            connection.execute("DELETE FROM downloads")
+            connection.executemany("INSERT INTO downloads VALUES (?,?,?,?,?,?,?,?)", [(
+                key, entry.get("id", ""), entry.get("title", ""), entry.get("thumbnail", ""),
+                entry.get("mode", ""), entry.get("quality", "best"), entry.get("folder", ""),
+                entry.get("downloaded_at", "")) for key, entry in self.downloads.items()])
 
     @staticmethod
     def download_key(media_id, mode, quality):
@@ -214,6 +286,7 @@ class State:
                     "deno": shutil.which("deno") is not None,
                     "python": sys.version.split()[0]}
 
+initialize_database()
 STATE = State()
 
 
@@ -375,7 +448,10 @@ def choose_folder():
         root = tk.Tk()
         root.withdraw()
         root.attributes("-topmost", True)
-        selected = filedialog.askdirectory(title="Choisir le dossier pour les téléchargements")
+        initial = get_setting("parent_folder", "")
+        selected = filedialog.askdirectory(
+            title="Choisir le dossier mère pour les téléchargements",
+            initialdir=initial if initial and Path(initial).is_dir() else None)
         root.destroy()
         return selected or None
     except Exception:
@@ -452,7 +528,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self.response(200, result)
             if self.path == "/api/folder":
                 value = choose_folder()
+                if value:
+                    save_setting("parent_folder", value)
                 return self.response(200, {"folder": value})
+            if self.path == "/api/settings":
+                return self.response(200, {
+                    "parent_folder": get_setting("parent_folder", ""),
+                    "database": DATABASE_FILE.name
+                })
             if self.path == "/api/history":
                 return self.response(200, {"entries": STATE.history_snapshot()})
             if self.path == "/api/download-info":
