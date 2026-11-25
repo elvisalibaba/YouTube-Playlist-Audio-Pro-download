@@ -15,6 +15,8 @@ import webbrowser
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib import request as urlrequest
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 
 from decouverte import discover, is_listing_page
@@ -25,6 +27,34 @@ from moteur import (make_download_command, make_preview_command, normalize_chann
 
 BASE = Path(__file__).resolve().parent
 HISTORY_FILE = BASE / "historique.json"
+THUMBNAIL_CACHE = {}
+THUMBNAIL_LOCK = threading.Lock()
+
+
+def fetch_youtube_thumbnail(video_id):
+    if not re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
+        raise ValueError("Identifiant de miniature invalide")
+    with THUMBNAIL_LOCK:
+        cached = THUMBNAIL_CACHE.get(video_id)
+    if cached:
+        return cached
+    last_error = None
+    for filename in ("hqdefault.jpg", "mqdefault.jpg", "default.jpg"):
+        req = urlrequest.Request(
+            f"https://i.ytimg.com/vi/{video_id}/{filename}",
+            headers={"User-Agent": "Mozilla/5.0", "Accept": "image/avif,image/webp,image/jpeg,*/*"})
+        try:
+            with urlrequest.urlopen(req, timeout=15) as response:
+                raw = response.read(2_000_001)
+            if raw and len(raw) <= 2_000_000:
+                with THUMBNAIL_LOCK:
+                    if len(THUMBNAIL_CACHE) >= 300:
+                        THUMBNAIL_CACHE.pop(next(iter(THUMBNAIL_CACHE)))
+                    THUMBNAIL_CACHE[video_id] = raw
+                return raw
+        except (HTTPError, URLError, TimeoutError, OSError) as exc:
+            last_error = exc
+    raise ValueError(f"Miniature indisponible : {last_error or 'réponse vide'}")
 
 
 class State:
@@ -93,7 +123,13 @@ class State:
 
     def history_snapshot(self):
         with self.lock:
-            return [dict(entry) for entry in self.history]
+            result = [dict(entry) for entry in self.history]
+            for entry in result:
+                if self.running and entry.get("id") == self.active_history_id:
+                    entry["status"] = self.status
+                    entry["progress"] = self.progress
+                    entry["running"] = True
+            return result
 
     def log(self, line):
         with self.lock:
@@ -113,6 +149,7 @@ class State:
             return {"running": self.running, "previewing": self.previewing,
                     "status": self.status, "progress": self.progress, "logs": list(self.logs),
                     "errors": self.errors,
+                    "active_history_id": self.active_history_id,
                     "ffmpeg": shutil.which("ffmpeg") is not None,
                     "deno": shutil.which("deno") is not None,
                     "python": sys.version.split()[0]}
@@ -311,6 +348,19 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(raw)
         elif self.path == "/api/status":
             self.response(200, STATE.snapshot())
+        elif self.path.startswith("/api/thumbnail/"):
+            video_id = self.path.removeprefix("/api/thumbnail/").split("?", 1)[0]
+            try:
+                raw = fetch_youtube_thumbnail(video_id)
+                self.send_response(200)
+                self.send_header("Content-Type", "image/jpeg")
+                self.send_header("Content-Length", str(len(raw)))
+                self.send_header("Cache-Control", "private, max-age=86400")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                self.wfile.write(raw)
+            except ValueError as exc:
+                self.response(404, {"error": str(exc)})
         else:
             self.response(404, {"error": "Ressource introuvable"})
 

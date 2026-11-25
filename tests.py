@@ -165,6 +165,35 @@ class TestServeur(unittest.TestCase):
         code,raw=self.call('/api/cancel',{},False)
         self.assertEqual(code,403)
 
+    def test_youtube_thumbnail_is_served_locally(self):
+        image = b'\xff\xd8fake-jpeg\xff\xd9'
+        with patch.object(serveur, 'fetch_youtube_thumbnail', return_value=image):
+            code, raw = self.call('/api/thumbnail/BaW_jenozKc')
+        self.assertEqual(code, 200)
+        self.assertEqual(raw, image)
+
+    def test_history_exposes_live_download_progress(self):
+        with serveur.STATE.lock:
+            previous = (serveur.STATE.history, serveur.STATE.running,
+                        serveur.STATE.active_history_id, serveur.STATE.progress, serveur.STATE.status)
+            serveur.STATE.history = [{'id':'live1','title':'Playlist','status':'En cours'}]
+            serveur.STATE.running = True
+            serveur.STATE.active_history_id = 'live1'
+            serveur.STATE.progress = '42.5%'
+            serveur.STATE.status = 'Téléchargement de la vidéo 2'
+        try:
+            code, raw = self.call('/api/history', {})
+            entry = json.loads(raw)['entries'][0]
+            self.assertEqual(code, 200)
+            self.assertTrue(entry['running'])
+            self.assertEqual(entry['progress'], '42.5%')
+            self.assertEqual(entry['status'], 'Téléchargement de la vidéo 2')
+        finally:
+            with serveur.STATE.lock:
+                (serveur.STATE.history, serveur.STATE.running,
+                 serveur.STATE.active_history_id, serveur.STATE.progress,
+                 serveur.STATE.status) = previous
+
     def test_preview_mocked(self):
         with patch.object(serveur,'preview',return_value={'title':'Test','entries':[],'truncated':False,'has_playlist':True}):
             code,raw=self.call('/api/preview',{'url':'https://youtube.com/@chan','exclude_shorts':True})
