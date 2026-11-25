@@ -19,7 +19,7 @@ Application Python locale avec interface Web pour analyser et télécharger des 
 
 ### Version EXE
 
-Télécharger `MediaSelectPro.exe` depuis la section **Releases** du dépôt, puis double-cliquer dessus. Python n'est pas nécessaire avec cette version. Garder la fenêtre de commande ouverte pendant l'utilisation.
+Télécharger [`MediaSelectPro.exe`](release/MediaSelectPro.exe), puis double-cliquer dessus. Python n'est pas nécessaire avec cette version. Garder la fenêtre de commande ouverte pendant l'utilisation.
 
 FFmpeg reste recommandé pour les conversions audio et l'assemblage des meilleures qualités vidéo.
 
