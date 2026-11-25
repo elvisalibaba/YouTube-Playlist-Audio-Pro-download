@@ -11,6 +11,12 @@ MODES = {"audio_original", "audio_mp3", "audio_m4a", "video_best", "video_mp4"}
 QUALITIES = {"best", "2160", "1440", "1080", "720", "480", "360"}
 
 
+def yt_dlp_prefix(python: str | list[str]) -> list[str]:
+    if isinstance(python, list):
+        return list(python)
+    return [python, "-m", "yt_dlp"]
+
+
 def validate_url(value: str) -> str:
     if not isinstance(value, str) or len(value) > 4096:
         raise ValueError("URL invalide.")
@@ -70,12 +76,13 @@ def normalize_channel(url: str, exclude_shorts: bool) -> tuple[str, bool]:
     return url, False
 
 
-def make_preview_command(python: str, url: str) -> list[str]:
-    return [python, "-m", "yt_dlp", "--ignore-config", "--flat-playlist", "--dump-single-json",
-            "--playlist-end", str(PREVIEW_LIMIT + 1), "--ignore-errors", "--no-warnings", url]
+def make_preview_command(python: str | list[str], url: str) -> list[str]:
+    return yt_dlp_prefix(python) + ["--ignore-config", "--flat-playlist", "--dump-single-json",
+                                    "--playlist-end", str(PREVIEW_LIMIT + 1), "--ignore-errors",
+                                    "--no-warnings", url]
 
 
-def make_download_command(python: str, url: str | list[str], folder: str, mode: str,
+def make_download_command(python: str | list[str], url: str | list[str], folder: str, mode: str,
                           quality: str, indices: list[int] | None, exclude_shorts: bool = True, direct_links: bool = False) -> list[str]:
     urls = [validate_url(u) for u in url] if isinstance(url, list) else [validate_url(url)]
     if not urls or len(urls) > MULTI_LINK_LIMIT:
@@ -94,7 +101,7 @@ def make_download_command(python: str, url: str | list[str], folder: str, mode: 
     # Archive by mode to allow downloading an audio and a video of the same source separately.
     archive_name = f"{mode}_{quality}" if mode.startswith("video_") else mode
     archive = output / f".telechargements_{archive_name}.txt"
-    cmd = [python, "-m", "yt_dlp", "--ignore-config", "--newline", "--no-overwrites",
+    cmd = yt_dlp_prefix(python) + ["--ignore-config", "--newline", "--no-overwrites",
            "--continue", "--ignore-errors", "--windows-filenames", "--trim-filenames", "180",
            "--download-archive", str(archive), "-P", str(output),
            "-o", "%(extractor_key|Site)s/%(playlist_title|Vidéos)s/%(playlist_index|0)03d - %(title).150B [%(id)s].%(ext)s",

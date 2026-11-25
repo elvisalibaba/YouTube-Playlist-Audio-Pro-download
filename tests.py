@@ -39,6 +39,9 @@ class TestMoteur(unittest.TestCase):
         cmd = moteur.make_preview_command('python', 'https://x.com/abc')
         self.assertIn('--flat-playlist', cmd)
         self.assertEqual(cmd[cmd.index('--playlist-end')+1], '251')
+        frozen = moteur.make_preview_command(['MediaSelectPro.exe', '--run-yt-dlp'],
+                                             'https://x.com/abc')
+        self.assertEqual(frozen[:2], ['MediaSelectPro.exe', '--run-yt-dlp'])
 
     def test_parse_single_and_playlist(self):
         single = moteur.parse_entries({'id': '123', 'title': 'Titre', 'uploader': 'Chaîne test',

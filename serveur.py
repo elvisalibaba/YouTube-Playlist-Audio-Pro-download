@@ -25,10 +25,16 @@ from moteur import (make_download_command, make_preview_command, normalize_chann
                     parse_entries, validate_url, parse_source_urls, recognize_site,
                     PREVIEW_LIMIT, MODES, QUALITIES)
 
-BASE = Path(__file__).resolve().parent
-HISTORY_FILE = BASE / "historique.json"
+FROZEN = bool(getattr(sys, "frozen", False))
+BASE = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+DATA_BASE = Path(sys.executable).resolve().parent if FROZEN else BASE
+HISTORY_FILE = DATA_BASE / "historique.json"
 THUMBNAIL_CACHE = {}
 THUMBNAIL_LOCK = threading.Lock()
+
+
+def yt_dlp_runtime():
+    return [sys.executable, "--run-yt-dlp"] if FROZEN else sys.executable
 
 
 def fetch_youtube_thumbnail(video_id):
@@ -221,7 +227,7 @@ def work_download(commands):
 
 def preview_one(url):
     """Exécute yt-dlp en lecture seule pour un lien, sans télécharger de média."""
-    cmd = make_preview_command(sys.executable, url)
+    cmd = make_preview_command(yt_dlp_runtime(), url)
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                          encoding="utf-8", errors="replace",
                          creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
@@ -429,11 +435,11 @@ class Handler(BaseHTTPRequestHandler):
                         raise ValueError("Aucune vidéo sélectionnée.")
                     if isinstance(target, list):
                         # 8 vidéos par commande : sécurité pour cmd.exe / CreateProcess Windows.
-                        commands = [make_download_command(sys.executable, target[j:j + 8],
+                        commands = [make_download_command(yt_dlp_runtime(), target[j:j + 8],
                                      str(data.get("folder") or ""), mode, quality, None,
                                      direct_links=True) for j in range(0, len(target), 8)]
                     else:
-                        commands = [make_download_command(sys.executable, target,
+                        commands = [make_download_command(yt_dlp_runtime(), target,
                                     str(data.get("folder") or ""), mode, quality, effective_indices)]
                     STATE.logs.clear()
                     STATE.errors = 0
@@ -465,6 +471,10 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "--run-yt-dlp":
+        from yt_dlp import main as yt_dlp_main
+        yt_dlp_main(sys.argv[2:])
+        return
     parser = argparse.ArgumentParser(description="Téléchargeur local multi-sites")
     parser.add_argument("--no-browser", action="store_true")
     args = parser.parse_args()

@@ -17,6 +17,16 @@ Application Python locale avec interface Web pour analyser et télécharger des 
 
 ## Installation sous Windows 10 et 11
 
+### Version EXE
+
+Télécharger `MediaSelectPro.exe` depuis la section **Releases** du dépôt, puis double-cliquer dessus. Python n'est pas nécessaire avec cette version. Garder la fenêtre de commande ouverte pendant l'utilisation.
+
+FFmpeg reste recommandé pour les conversions audio et l'assemblage des meilleures qualités vidéo.
+
+Pour reconstruire l'EXE depuis les sources, lancer `BUILD_EXE.cmd`. Le fichier final sera créé dans `dist\MediaSelectPro.exe`.
+
+### Version Python
+
 1. Installer **Python 3.11 ou une version supérieure** depuis https://www.python.org/downloads/ en cochant l'option « Add Python to PATH ».
 2. Télécharger ou extraire entièrement le projet.
 3. Ouvrir le dossier du projet.
