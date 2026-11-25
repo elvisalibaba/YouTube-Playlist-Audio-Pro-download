@@ -7,7 +7,8 @@ Application Python locale avec interface Web pour analyser et télécharger des 
 - Analyse d'une URL de vidéo, de playlist ou de chaîne compatible avec `yt-dlp`.
 - Affichage des vidéos sous forme de cartes avec miniature, titre, chaîne et durée.
 - Sélection individuelle ou groupée des éléments à télécharger.
-- Interface professionnelle inspirée des couleurs de la République démocratique du Congo.
+- Interface professionnelle en trois zones : navigation, bibliothèque YouTube et centre de téléchargement.
+- Identité visuelle inspirée des couleurs de la République démocratique du Congo.
 - Historique local persistant des 100 derniers téléchargements.
 - Téléchargement dans le format audio original, MP3 ou M4A.
 - Téléchargement vidéo en qualité maximale ou en MP4 avec une résolution choisie.
