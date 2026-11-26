@@ -126,6 +126,7 @@ def make_download_command(python: str | list[str], url: str | list[str], folder:
            "--download-archive", str(archive), "-P", str(output),
            "-o", "%(extractor_key|Site)s/%(playlist_title|Vidéos)s/%(playlist_index|0)03d - %(title).150B [%(id)s].%(ext)s",
            "--retries", "5", "--fragment-retries", "5", "--concurrent-fragments", "3",
+           "--print", "before_dl:MEDIA_SELECT_START:%(id)s",
            "--print", "after_move:MEDIA_SELECT_DONE:%(id)s"]
     if direct_links:
         cmd.append("--no-playlist")

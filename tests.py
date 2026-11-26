@@ -8,6 +8,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 from urllib.parse import urlsplit
+import os
+
+# Base et bibliothèque isolées : les tests ne doivent jamais modifier les données réelles.
+_TEST_DATA = tempfile.TemporaryDirectory(prefix="media_select_tests_")
+os.environ["MEDIA_SELECT_DATA"] = _TEST_DATA.name
 import decouverte
 
 import moteur
@@ -256,6 +261,25 @@ class TestServeur(unittest.TestCase):
                 (serveur.STATE.downloads, serveur.STATE.active_items,
                  serveur.STATE.last_command_mode, serveur.STATE.active_quality,
                  serveur.STATE.active_folder) = previous
+
+    def test_each_media_exposes_its_own_progress(self):
+        with serveur.STATE.lock:
+            previous = (serveur.STATE.active_items, serveur.STATE.active_item_id,
+                        serveur.STATE.item_progress, serveur.STATE.progress)
+            serveur.STATE.active_items = {
+                'abc123def45': {'id': 'abc123def45', 'title': 'Première vidéo'}}
+            serveur.STATE.active_item_id = ''
+            serveur.STATE.item_progress = {}
+            serveur.STATE.progress = ''
+        try:
+            serveur.STATE.log('MEDIA_SELECT_START:abc123def45')
+            serveur.STATE.log('[download] 37.5% of 10MiB')
+            self.assertEqual(serveur.STATE.snapshot()['items']['abc123def45'], {
+                'status': 'Téléchargement', 'progress': '37.5%'})
+        finally:
+            with serveur.STATE.lock:
+                (serveur.STATE.active_items, serveur.STATE.active_item_id,
+                 serveur.STATE.item_progress, serveur.STATE.progress) = previous
 
     def test_preview_mocked(self):
         with patch.object(serveur,'preview',return_value={'title':'Test','entries':[],'truncated':False,'has_playlist':True}):

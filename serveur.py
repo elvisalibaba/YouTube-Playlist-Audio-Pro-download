@@ -30,9 +30,12 @@ from moteur import (make_download_command, make_preview_command, normalize_chann
 FROZEN = bool(getattr(sys, "frozen", False))
 BASE = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 DATA_BASE = Path(sys.executable).resolve().parent if FROZEN else BASE
+# Les tests définissent MEDIA_SELECT_DATA pour ne jamais toucher la vraie base.
+DATA_BASE = Path(os.environ.get("MEDIA_SELECT_DATA") or DATA_BASE)
 HISTORY_FILE = DATA_BASE / "historique.json"
 DOWNLOADS_FILE = DATA_BASE / "telechargements.json"
 DATABASE_FILE = DATA_BASE / "media_select.db"
+DEFAULT_LIBRARY = DATA_BASE / "Médias"
 THUMBNAIL_CACHE = {}
 THUMBNAIL_LOCK = threading.Lock()
 
@@ -52,31 +55,43 @@ def database_connection():
 
 
 def initialize_database():
+    DEFAULT_LIBRARY.mkdir(parents=True, exist_ok=True)
+    (DEFAULT_LIBRARY / "Audio").mkdir(exist_ok=True)
+    (DEFAULT_LIBRARY / "Video").mkdir(exist_ok=True)
     with database_connection() as connection:
         connection.execute("PRAGMA journal_mode=WAL")
         connection.execute("""CREATE TABLE IF NOT EXISTS history (
             id TEXT PRIMARY KEY, created_at TEXT NOT NULL, completed_at TEXT,
             title TEXT NOT NULL, count INTEGER NOT NULL, mode TEXT NOT NULL,
             quality TEXT NOT NULL, folder TEXT NOT NULL, items_json TEXT NOT NULL,
-            status TEXT NOT NULL)""")
+            status TEXT NOT NULL, source_url TEXT NOT NULL DEFAULT '')""")
         connection.execute("""CREATE TABLE IF NOT EXISTS downloads (
             record_key TEXT PRIMARY KEY, media_id TEXT NOT NULL, title TEXT NOT NULL,
             thumbnail TEXT NOT NULL, mode TEXT NOT NULL, quality TEXT NOT NULL,
             folder TEXT NOT NULL, downloaded_at TEXT NOT NULL)""")
         connection.execute("""CREATE TABLE IF NOT EXISTS settings (
             setting_key TEXT PRIMARY KEY, setting_value TEXT NOT NULL)""")
+        history_columns = {row[1] for row in connection.execute("PRAGMA table_info(history)")}
+        if "source_url" not in history_columns:
+            connection.execute("ALTER TABLE history ADD COLUMN source_url TEXT NOT NULL DEFAULT ''")
+        # Un téléchargement resté "En cours" après une fermeture est en réalité interrompu.
+        connection.execute("UPDATE history SET status='Interrompu' WHERE status='En cours'")
+        connection.execute("""INSERT OR IGNORE INTO settings(setting_key, setting_value)
+                            VALUES('parent_folder', ?)""", (str(DEFAULT_LIBRARY),))
         if connection.execute("SELECT COUNT(*) FROM history").fetchone()[0] == 0:
             try:
                 legacy_history = json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
             except (OSError, ValueError, TypeError):
                 legacy_history = []
             for entry in legacy_history[:100] if isinstance(legacy_history, list) else []:
-                connection.execute("""INSERT OR IGNORE INTO history VALUES (?,?,?,?,?,?,?,?,?,?)""", (
+                connection.execute("""INSERT OR IGNORE INTO history
+                    (id,created_at,completed_at,title,count,mode,quality,folder,items_json,status,source_url)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?)""", (
                     entry.get("id", secrets.token_hex(8)), entry.get("created_at", ""),
                     entry.get("completed_at"), entry.get("title", "Téléchargement"),
                     int(entry.get("count", 0)), entry.get("mode", ""), entry.get("quality", "best"),
                     entry.get("folder", ""), json.dumps(entry.get("items", []), ensure_ascii=False),
-                    entry.get("status", "Terminé")))
+                    entry.get("status", "Terminé"), entry.get("source_url", "")))
         if connection.execute("SELECT COUNT(*) FROM downloads").fetchone()[0] == 0:
             try:
                 legacy_downloads = json.loads(DOWNLOADS_FILE.read_text(encoding="utf-8"))
@@ -100,6 +115,31 @@ def save_setting(key, value):
         connection.execute("""INSERT INTO settings(setting_key, setting_value) VALUES(?,?)
                             ON CONFLICT(setting_key) DO UPDATE SET setting_value=excluded.setting_value""",
                            (key, str(value)))
+
+
+def library_folder():
+    """Bibliothèque interne fixe : l'utilisateur n'a aucun chemin à configurer."""
+    try:
+        (DEFAULT_LIBRARY / "Audio").mkdir(parents=True, exist_ok=True)
+        (DEFAULT_LIBRARY / "Video").mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise ValueError("Impossible de créer la bibliothèque de téléchargement.") from exc
+    return str(DEFAULT_LIBRARY)
+
+
+def normalize_link(value):
+    return "\n".join(sorted(line.strip().rstrip("/") for line in str(value or "").splitlines() if line.strip()))
+
+
+def open_in_explorer(folder):
+    path = Path(folder)
+    path.mkdir(parents=True, exist_ok=True)
+    if os.name == "nt":
+        os.startfile(str(path))  # noqa: S606 - dossier local de l'application
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", str(path)])
+    else:
+        subprocess.Popen(["xdg-open", str(path)])
 
 
 def yt_dlp_runtime():
@@ -156,6 +196,8 @@ class State:
         self.preview_title = ""
         self.active_history_id = ""
         self.active_items = {}
+        self.active_item_id = ""
+        self.item_progress = {}
         self.active_quality = "best"
         self.active_folder = ""
         self.history = self._load_history()
@@ -169,16 +211,19 @@ class State:
                  "completed_at": row["completed_at"], "title": row["title"],
                  "count": row["count"], "mode": row["mode"], "quality": row["quality"],
                  "folder": row["folder"], "items": json.loads(row["items_json"] or "[]"),
-                 "status": row["status"]} for row in rows]
+                 "status": row["status"], "source_url": row["source_url"]} for row in rows]
 
     def _save_history(self):
         with database_connection() as connection:
             connection.execute("DELETE FROM history")
-            connection.executemany("INSERT INTO history VALUES (?,?,?,?,?,?,?,?,?,?)", [(
+            connection.executemany("""INSERT INTO history
+                (id,created_at,completed_at,title,count,mode,quality,folder,items_json,status,source_url)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)""", [(
                 entry["id"], entry.get("created_at", ""), entry.get("completed_at"),
                 entry.get("title", "Téléchargement"), int(entry.get("count", 0)),
                 entry.get("mode", ""), entry.get("quality", "best"), entry.get("folder", ""),
-                json.dumps(entry.get("items", []), ensure_ascii=False), entry.get("status", "Terminé"))
+                json.dumps(entry.get("items", []), ensure_ascii=False), entry.get("status", "Terminé"),
+                entry.get("source_url", ""))
                 for entry in self.history[:100]])
 
     @staticmethod
@@ -224,18 +269,35 @@ class State:
             }
             self._save_downloads()
 
-    def add_history(self, *, title, count, mode, quality, folder, items):
+    def add_history(self, *, title, count, mode, quality, folder, items, source_url=""):
         with self.lock:
             history_id = secrets.token_hex(8)
             self.history.insert(0, {
                 "id": history_id, "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
                 "title": str(title or "Téléchargement")[:240], "count": int(count),
                 "mode": str(mode), "quality": str(quality), "folder": str(folder)[:1000],
-                "items": [str(value)[:240] for value in items[:20]], "status": "En cours"
+                "items": [str(value)[:240] for value in items[:20]], "status": "En cours",
+                "source_url": str(source_url)[:35000]
             })
             self.history = self.history[:100]
             self._save_history()
             return history_id
+
+    def link_history(self, url):
+        key = normalize_link(url)
+        if not key:
+            return []
+        with self.lock:
+            return [{"id": e["id"], "created_at": e.get("created_at", ""), "status": e.get("status", ""),
+                     "mode": e.get("mode", ""), "count": e.get("count", 0)}
+                    for e in self.history if normalize_link(e.get("source_url", "")) == key]
+
+    def delete_history(self, history_id):
+        with self.lock:
+            if history_id == self.active_history_id and self.running:
+                raise ValueError("Impossible de supprimer un téléchargement en cours.")
+            self.history = [e for e in self.history if e.get("id") != history_id]
+            self._save_history()
 
     def finish_history(self, history_id, status):
         if not history_id:
@@ -260,9 +322,18 @@ class State:
 
     def log(self, line):
         with self.lock:
+            started = re.search(r"MEDIA_SELECT_START:([A-Za-z0-9_-]+)", line)
+            if started:
+                self.active_item_id = started.group(1)
+                self.item_progress[self.active_item_id] = {"status": "Téléchargement", "progress": "0%"}
+                self.status = "Téléchargement de " + self.active_items.get(
+                    self.active_item_id, {}).get("title", "la vidéo")
+                return
             completed = re.search(r"MEDIA_SELECT_DONE:([A-Za-z0-9_-]+)", line)
             if completed:
-                self.record_download(completed.group(1))
+                media_id = completed.group(1)
+                self.record_download(media_id)
+                self.item_progress[media_id] = {"status": "Terminé", "progress": "100%"}
                 self.status = "Vidéo enregistrée avec succès"
                 return
             self.logs.append(line[:800])
@@ -270,6 +341,9 @@ class State:
                 found = re.search(r"\b(\d+(?:\.\d+)?)%", line)
                 if found:
                     self.progress = found.group(1) + "%"
+                    if self.active_item_id:
+                        self.item_progress[self.active_item_id] = {
+                            "status": "Téléchargement", "progress": self.progress}
                 if "Downloading item" in line:
                     self.status = line.strip().replace("[download]", "").strip()
             elif "ERROR:" in line:
@@ -281,6 +355,7 @@ class State:
             return {"running": self.running, "previewing": self.previewing,
                     "status": self.status, "progress": self.progress, "logs": list(self.logs),
                     "errors": self.errors,
+                    "items": {key: dict(value) for key, value in self.item_progress.items()},
                     "active_history_id": self.active_history_id,
                     "ffmpeg": shutil.which("ffmpeg") is not None,
                     "deno": shutil.which("deno") is not None,
@@ -525,16 +600,35 @@ class Handler(BaseHTTPRequestHandler):
                 result["effective_url"] = "\n".join(urls)
                 result["adjusted_channel"] = adjusted
                 result["preview_limit"] = PREVIEW_LIMIT
+                result["link_history"] = STATE.link_history("\n".join(urls))
                 return self.response(200, result)
             if self.path == "/api/folder":
                 value = choose_folder()
                 if value:
                     save_setting("parent_folder", value)
-                return self.response(200, {"folder": value})
+                return self.response(200, {"folder": library_folder() if value else None})
+            if self.path == "/api/folder-reset":
+                save_setting("parent_folder", str(DEFAULT_LIBRARY))
+                return self.response(200, {"folder": library_folder()})
+            if self.path == "/api/open-folder":
+                library = library_folder()
+                kind = data.get("kind")
+                open_in_explorer(Path(library) / kind if kind in ("Audio", "Video") else library)
+                return self.response(200, {"ok": True})
+            if self.path == "/api/history-delete":
+                STATE.delete_history(str(data.get("id") or ""))
+                return self.response(200, {"ok": True})
             if self.path == "/api/settings":
+                library = library_folder()
                 return self.response(200, {
-                    "parent_folder": get_setting("parent_folder", ""),
-                    "database": DATABASE_FILE.name
+                    "parent_folder": library,
+                    "audio_folder": str(Path(library) / "Audio"),
+                    "video_folder": str(Path(library) / "Video"),
+                    "database": DATABASE_FILE.name,
+                    "database_path": str(DATABASE_FILE),
+                    "is_default": Path(library) == DEFAULT_LIBRARY,
+                    "history_count": len(STATE.history),
+                    "download_count": len(STATE.downloads)
                 })
             if self.path == "/api/history":
                 return self.response(200, {"entries": STATE.history_snapshot()})
@@ -543,8 +637,10 @@ class Handler(BaseHTTPRequestHandler):
                 quality = data.get("quality", "best")
                 if mode not in MODES or quality not in QUALITIES:
                     raise ValueError("Format ou qualité inconnus.")
-                indices = STATE.downloaded_indices(mode, quality, str(data.get("folder") or ""))
-                return self.response(200, {"downloaded_indices": indices})
+                folder = str(data.get("folder") or library_folder())
+                indices = STATE.downloaded_indices(mode, quality, folder)
+                return self.response(200, {"downloaded_indices": indices,
+                    "duplicate_count": len(indices), "checked": True})
             if self.path == "/api/start":
                 urls = parse_source_urls(data.get("url", ""))
                 if len(urls) == 1:
@@ -566,8 +662,8 @@ class Handler(BaseHTTPRequestHandler):
                         if not set(indices).issubset(STATE.preview_valid_indices):
                             raise ValueError("La sélection ne correspond pas à la liste analysée.")
                     requested_indices = sorted(indices or STATE.preview_valid_indices)
-                    duplicates = set(STATE.downloaded_indices(
-                        mode, quality, str(data.get("folder") or "")))
+                    folder = str(data.get("folder") or library_folder())
+                    duplicates = set(STATE.downloaded_indices(mode, quality, folder))
                     indices = [index for index in requested_indices if index not in duplicates]
                     if not indices:
                         raise ValueError("Cette sélection a déjà été téléchargée dans ce format.")
@@ -591,11 +687,11 @@ class Handler(BaseHTTPRequestHandler):
                     if isinstance(target, list):
                         # 8 vidéos par commande : sécurité pour cmd.exe / CreateProcess Windows.
                         commands = [make_download_command(yt_dlp_runtime(), target[j:j + 8],
-                                     str(data.get("folder") or ""), mode, quality, None,
+                                     folder, mode, quality, None,
                                      direct_links=True) for j in range(0, len(target), 8)]
                     else:
                         commands = [make_download_command(yt_dlp_runtime(), target,
-                                    str(data.get("folder") or ""), mode, quality, effective_indices)]
+                                    folder, mode, quality, effective_indices)]
                     STATE.logs.clear()
                     STATE.errors = 0
                     STATE.status = "Démarrage du téléchargement"
@@ -604,17 +700,23 @@ class Handler(BaseHTTPRequestHandler):
                     STATE.cancel_requested = False
                     STATE.last_command_mode = mode
                     STATE.active_quality = quality
-                    STATE.active_folder = str(data.get("folder") or "")
+                    STATE.active_folder = folder
                     selected_indices = sorted(indices)
                     STATE.active_items = {
                         STATE.preview_media[index]["id"]: dict(STATE.preview_media[index])
                         for index in selected_indices if STATE.preview_media.get(index, {}).get("id")
                     }
+                    STATE.active_item_id = ""
+                    STATE.item_progress = {
+                        media_id: {"status": "En attente", "progress": "0%"}
+                        for media_id in STATE.active_items
+                    }
                     selected_titles = [STATE.preview_titles.get(index, f"Vidéo {index}")
                                        for index in selected_indices]
                     STATE.active_history_id = STATE.add_history(
                         title=STATE.preview_title, count=len(selected_indices), mode=mode,
-                        quality=quality, folder=str(data.get("folder") or ""), items=selected_titles)
+                        quality=quality, folder=folder, items=selected_titles,
+                        source_url="\n".join(urls))
                 threading.Thread(target=work_download, args=(commands,), daemon=True).start()
                 return self.response(200, {"ok": True, "skipped": len(duplicates & set(requested_indices))})
             if self.path == "/api/cancel":
